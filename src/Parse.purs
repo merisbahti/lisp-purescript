@@ -13,7 +13,7 @@ import Data.String.CodeUnits (fromCharArray, toCharArray)
 import PsLisp (Expr(..), Result(..))
 import Text.Parsing.Parser (Parser, runParser)
 import Text.Parsing.Parser.Combinators (sepBy, try)
-import Text.Parsing.Parser.String (char, oneOf, satisfy, whiteSpace)
+import Text.Parsing.Parser.String (char, oneOf, whiteSpace)
 
 type SParser a = Parser String a
 
@@ -35,7 +35,9 @@ parseAtom = do
   rest <- many $ letter <|> symbol <|> digit
   let atom = charlistToString $ first:rest
   pure $ case atom of
-                _ -> Atom atom
+              "true" -> Boolean true
+              "false" -> Boolean false
+              _ -> Atom atom
 
 parseInt :: SParser Expr
 parseInt = do

@@ -2,11 +2,12 @@ module PsLisp.Eval where
 
 import Data.Tuple
 
-import Control.Alt ((<|>))
+import Control.Alt (alt, (<|>))
+import Control.MonadPlus ((>>=))
 import Data.List (List(..), filter, foldl, foldr, head, tail, zip, (:))
 import Data.Maybe (Maybe(..))
 import Data.Traversable (sequence)
-import Prelude (bind, map, pure, show, ($), (+), (-), (/=), (<$>), (<>))
+import Prelude (bind, map, pure, show, ($), (+), (-), (/=), (<), (<$>), (<>), (==))
 import PsLisp (Env, EvalResult, Expr(..), Result(..))
 
 plus :: List Expr -> Env -> EvalResult
@@ -45,7 +46,64 @@ stdLib = (
   Tuple "-" (Proc minus)
   ):(
   Tuple "define" (Proc define)
+  ):(
+  Tuple "cond" (Proc cond)
+  ):(
+  Tuple "<" (Proc lt)
+  ):(
+  Tuple "=" (Proc eq)
   ) : Nil
+
+lt :: List Expr -> Env -> EvalResult
+lt (lh:rh:_) env = do
+  lhEval <- evalEnvRemoved lh env
+  rhEval <- evalEnvRemoved rh env
+  pure $ case (Tuple lhEval rhEval) of
+               Tuple (Int a) (Int b) -> Tuple (Boolean (a < b)) env
+               Tuple _       _       -> Tuple (Boolean false) env
+lt _ _ = Error ("Operator \"<\" takes only 2 args.")
+
+eq :: List Expr -> Env -> EvalResult
+eq (lh:rh:_) env = do
+  lhEval <- evalEnvRemoved lh env
+  rhEval <- evalEnvRemoved rh env
+  pure $ case (Tuple lhEval rhEval) of
+               Tuple (Int a) (Int b)         -> Tuple (Boolean (a == b)) env
+               Tuple (Boolean a) (Boolean b) -> Tuple (Boolean (a == b)) env
+               Tuple _       _               -> Tuple (Boolean false) env
+eq _ _ = Error ("Operator \"=\" takes only 2 args.")
+
+evalEnvRemoved :: Expr -> Env -> Result Expr
+evalEnvRemoved expr env = do
+  res <- eval' expr env
+  pure $ fst res
+
+cond :: List Expr -> Env -> EvalResult
+cond exprs env = do
+  condPairs <- getCondPairs exprs
+  cond' $ condPairs
+  where
+        cond' :: List (Tuple Expr Expr) -> EvalResult
+        cond' tuples = case foldl reducer (Ok Nothing) tuples of
+               Ok (Just e)  -> eval' e env
+               Ok (Nothing) -> Ok (Tuple (Null) (env))
+               Error e      -> Error e
+          where reducer :: Result (Maybe Expr) -> (Tuple Expr Expr) -> Result (Maybe Expr)
+                reducer (Ok (Just a))                  _  = Ok (Just a)
+                reducer (Ok (Nothing)) (Tuple pred cons)  = (
+                case eval' pred env of
+                     Ok (Tuple (Boolean true) _) -> Ok (Just cons)
+                     Ok (Tuple _ _ )  -> Ok Nothing
+                     Error e -> Error e
+                     )
+                reducer a                               _ = a
+        getCondPairs :: List Expr -> Result (List (Tuple Expr Expr))
+        getCondPairs pairs = do
+           consequent <- sequence $ getCondPair <$> pairs
+           pure consequent
+        getCondPair :: Expr -> Result (Tuple Expr Expr)
+        getCondPair (List(a:b:Nil)) = Ok (Tuple a b)
+        getCondPair (e)          = Error ("Cond expects pair of two expressions, found: " <> show e)
 
 define :: List Expr -> Env -> EvalResult
 define (Atom(a):b:_) env = do
@@ -61,7 +119,6 @@ lambda exprs freeVars = do
       args = maybeToResult $ head exprs
   block <- maybeToResult $ tail exprs
   varNames <- getVarNames <$> args
-  -- TODO: assert that lambda takes 2 arguments for now.
   case varNames of
        Ok (e) -> Ok (Tuple (Proc (newProc e block)) freeVars)
        Error (e) -> Error e

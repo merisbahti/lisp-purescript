@@ -27,35 +27,132 @@ main :: Effect Unit
 main = runTest do
   suite "parsing" do
     test "Successful" do
-      Assert.equal (readProgram "(+ 1 2 3)") (Ok ((List (Atom("+") : Int 1: Int 2: Int 3: Nil)) : Nil))
-      Assert.equal (readProgram "(+ 1 (+ 2 3) 44 5)") (Ok ((
+      Assert.equal (Ok ((List (Atom("+") : Int 1: Int 2: Int 3: Nil)) : Nil)) (readProgram "(+ 1 2 3)")
+      Assert.equal (Ok (Boolean(true) : Nil)) (readProgram "true")
+      Assert.equal (Ok (Boolean(false) : Nil)) (readProgram "false")
+      Assert.equal (Ok ((
                    List (Atom("+") : Int(1) : (
                    List (Atom("+") : Int(2) : Int (3) : Nil)
                    ) : Int(44) : Int (5) : Nil)) : Nil))
+                  (readProgram "(+ 1 (+ 2 3) 44 5)")
     test "Failing " do
       Assert.equal (readExpr "(+ 1 2 3") (Error "(ParseError \"Expected ')'\" (Position { line: 1, column: 9 }))")
   suite "evaluating" do
     test "Eval arithmetic" do
-       Assert.equal (readAndEval "(+ 1 2)") (Ok (Int 3))
-       Assert.equal (readAndEval "(+ (+ 1 2) 2)") (Ok (Int 5))
-       Assert.equal (readAndEval "(+ (+ 1 2) (+ 3 4))") (Ok (Int 10))
-       Assert.equal (readAndEval "(+ (+ 1 2) (- 3 4))") (Ok (Int 2))
-       Assert.equal (readAndEval "(- 3 2 1)") (Ok (Int 0))
+       Assert.equal (Ok (Int 3)) (readAndEval "(+ 1 2)")
+       Assert.equal (Ok (Int 5)) (readAndEval "(+ (+ 1 2) 2)")
+       Assert.equal (Ok (Int 10)) (readAndEval "(+ (+ 1 2) (+ 3 4))")
+       Assert.equal (Ok (Int 2)) (readAndEval "(+ (+ 1 2) (- 3 4))")
+       Assert.equal (Ok (Int 0)) (readAndEval "(- 3 2 1)")
     test "lambdas" do
-       Assert.equal (readAndEval "((lambda (x) x) 3)") (Ok (Int 3))
-       Assert.equal (readAndEval "((lambda (x) (+ 1 x)) 2)") (Ok (Int 3))
+       Assert.equal (Ok (Int 3)) (readAndEval "((lambda (x) x) 3)")
+       Assert.equal (Ok (Int 3)) (readAndEval "((lambda (x) (+ 1 x)) 2)")
     test "define" do
-       Assert.equal (readAndEval "(define a 3)") (Ok Null)
-       Assert.equal (readAndEval "(define a (+ 2 3))") (Ok Null)
-       Assert.equal (readAndEval """
+       Assert.equal (Ok Null) (readAndEval "(define a 3)")
+       Assert.equal (Ok Null) (readAndEval "(define a (+ 2 3))")
+       Assert.equal (Ok (Int 10)) (readAndEval """
                     ((lambda (x)
                       (define a (+ 2 3))
                       (+ a x)) 5)
-                    """) (Ok (Int 10))
-       Assert.equal (readAndEval """
+                    """)
+       Assert.equal (Ok (Int 15)) (readAndEval """
                     (define f (lambda (x)
                       (define a 2)
                       (define b 2)
                       (+ a b x 1)))
                     (f 10)
-                    """) (Ok (Int 15))
+                    """)
+       Assert.equal (Ok (Int 15)) (readAndEval """
+                    (define f (lambda (x)
+                      (define a 2)
+                      (define b 2)
+                      (+ a b x 1)))
+                    (f 10)
+                    """)
+       Assert.equal (Ok (Int 2))
+                    (readAndEval """
+                    (define f
+                      (lambda (x)
+                        (cond
+                          (false 0)
+                          (true 2)
+                          (true 1)
+                        )
+                      ))
+                    (f 1)
+                    """)
+       Assert.equal (Ok (Boolean true))
+                    (readAndEval """
+                    (= 5 5)
+                    """)
+       Assert.equal (Ok (Boolean true))
+                    (readAndEval """
+                    (define f (lambda (x y) (= 5 x)))
+                    (f 5 4)
+                    """)
+       Assert.equal (Ok (Int 1))
+                    (readAndEval """
+                    (define f
+                      (lambda (x y)
+                        (cond
+                          ((= 5 x) 1)
+                          ((= x 4) 2)
+                          (true 3)
+                        )
+                      ))
+                    (f 5 4)
+                    """)
+       Assert.equal (Ok (Boolean false))
+                    (readAndEval """
+                    (< 3 2)
+                    """)
+       Assert.equal (Ok (Boolean false))
+                    (readAndEval """
+                    (< 3 3)
+                    """)
+       Assert.equal (Ok (Boolean true))
+                    (readAndEval """
+                    (< 2 3)
+                    """)
+       Assert.equal (Ok (Int 50))
+                    (readAndEval """
+                    (define f
+                      (lambda (x)
+                        (cond
+                          ((< x 10) (f (+ 1 x)))
+                          (true x)
+                        )
+                      ))
+                    (f 50)
+                    """)
+       Assert.equal (Ok (Int 625))
+                    (readAndEval """
+                    (define f
+                      (lambda (x y)
+                        (cond
+                          ((< x y) (f (+ 1 x)))
+                          (true x)
+                        )
+                      ))
+                    (f 0 625)
+                    """)
+       Assert.equal (Ok (Int 55))
+                    (readAndEval """
+                    (define fib-iter
+                      (lambda (n a b)
+                        (cond
+                          ((= n 0) a)
+                          (true (fib-iter (- n 1) b (+ a b))))))
+                    (define fib (lambda (n) (fib-iter n 0 1)))
+                    (fib 10)
+                    """)
+       Assert.equal (Ok (Int 102334155))
+                    (readAndEval """
+                    (define fib-iter
+                      (lambda (n a b)
+                        (cond
+                          ((= n 0) a)
+                          (true (fib-iter (- n 1) b (+ a b))))))
+                    (define fib (lambda (n) (fib-iter n 0 1)))
+                    (fib 40)
+                    """)

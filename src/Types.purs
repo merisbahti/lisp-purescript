@@ -10,6 +10,7 @@ instance showExpr :: Show Expr where
   show (Atom s) = s
   show (List xs) = "(" <> (intercalate " " <<< map show $ xs) <> ")"
   show (Int i) = show i
+  show (Boolean b) = show b
   show (Proc _) = "Procedure"
   show (String s) = "\""<> s <>"\""
   show (DottedList init rest) = "(" <> (intercalate " " <<< map show $ init) <> " . " <> show rest <> ")"
@@ -26,6 +27,7 @@ data Expr
   | Proc (List Expr -> Env -> EvalResult)
   | String String
   | DottedList (List Expr) Expr
+  | Boolean (Boolean)
   | Null
 
 data Result a = Ok a
@@ -34,6 +36,7 @@ data Result a = Ok a
 instance eqExpr :: Eq Expr where
   eq (Int a)        (Int b)     = a == b
   eq (Atom a)       (Atom b)    = a == b
+  eq (Boolean a)    (Boolean b) = a == b
   eq (Null)         (Null)      = true
   eq (List a)       (List b)    = a == b
   eq (String a)     (String b)  = a == b
