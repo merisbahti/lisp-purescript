@@ -3,9 +3,10 @@ module PsLisp.Eval where
 import Data.Tuple
 
 import Control.Alt ((<|>))
-import Data.List (List(..), foldl, foldr, (:))
+import Data.List (List(..), filter, foldl, foldr, head, tail, zip, (:))
 import Data.Maybe (Maybe(..))
-import Prelude (bind, show, ($), (+), (-), (<$>), (<>))
+import Data.Traversable (sequence)
+import Prelude (bind, map, pure, show, ($), (+), (-), (<$>), (<>), (==), (>>=))
 import PsLisp (Env, EvalResult, Expr(..), Result(..))
 
 plus :: List Expr -> Env -> EvalResult
@@ -39,8 +40,52 @@ stdLib :: Env
 stdLib = (
   Tuple "+" (Proc plus)
   ):(
+  Tuple "lambda" (Proc lambda)
+  ):(
   Tuple "-" (Proc minus)
   ) : Nil
+
+lambda :: List Expr -> Env -> EvalResult
+lambda exprs freeVars = do
+  let args :: Result Expr
+      args = maybeToResult $ head exprs
+  body <- maybeToResult $ tail exprs >>= head
+  varNames <- getVarNames <$> args
+  -- TODO: assert that lambda takes 2 arguments for now.
+  case varNames of
+       Ok (e) -> Ok (Tuple (Proc (newProc e body)) freeVars)
+       Error (e) -> Error e
+     where newProc :: List String -> Expr -> List Expr -> Env -> EvalResult
+           newProc varNames body boundExprs env = do
+             evaluatedBoundExprs <- evaluateListOfExpressions boundExprs env
+             let zippedArgs :: List (Tuple String Expr)
+                 zippedArgs = zip varNames evaluatedBoundExprs
+             procEvalResult <- eval' body (defineMultipleInEnv zippedArgs env)
+             pure $ case procEvalResult of
+                      Tuple procExpr _ -> Tuple procExpr env
+           getVarNames :: Expr -> Result (List String)
+           getVarNames (List(Atom(x):xs)) = do
+              rest <- getVarNames(List(xs))
+              pure (x : rest)
+           getVarNames (List(Nil)) = Ok (Nil)
+           getVarNames (List(x:xs)) = Error ("\"" <> show x <> "\"" <> "Cannot be bound to a variable")
+           getVarNames (x) = Error ("Variable list must be list, found: \"" <> show x)
+
+           evaluateListOfExpressions :: List Expr -> Env -> Result (List Expr)
+           evaluateListOfExpressions exprList env = do
+               sequence $ map evalAndGetExpr exprList
+                  where evalAndGetExpr :: Expr -> Result Expr
+                        evalAndGetExpr expr = fst <$> (eval' expr env)
+
+
+lookupEnv :: String -> Env -> Result Expr
+lookupEnv name env = (maybeToResult $ lookup name env) <|> (Error ("Couldnt find \""<>name<>"\" in environment:" <> show env))
+
+defineInEnv :: (Tuple String Expr) -> Env -> Env
+defineInEnv e@(Tuple name expr) env = e : env
+
+defineMultipleInEnv :: List (Tuple String Expr) -> Env -> Env
+defineMultipleInEnv newVars env = foldr defineInEnv env newVars
 
 getExprFromEvalResult :: EvalResult -> Result Expr
 getExprFromEvalResult r = fst <$> r
@@ -57,15 +102,23 @@ eval :: Expr -> EvalResult
 eval e = eval' e stdLib
 
 eval' :: Expr -> Env -> EvalResult
-eval' (Atom s) _ = Ok (Tuple (Atom s) Nil)
+eval' (Atom s) env = do
+  value <- lookupEnv s env
+  pure $ Tuple value env
 -- evaluate a list
 eval' (List ((Atom name):xs)) env = do
-  let lookedUp = (maybeToResult $ lookup name env) <|> (Error ("Couldnt find \""<>name<>"\" in environment."))
+  let lookedUp = lookupEnv name env
   case lookedUp of
       Ok (Proc f) -> (f xs env)
       Error e -> Error e
       Ok e -> Error ("First arg to list must be a function, can't apply: " <> show e)
-eval' (List (x:_)) _ = Error ("First arg to list must be a function, found: " <> show x)
+eval' (List (x:xs)) env = do
+  let evaled :: EvalResult
+      evaled = eval' x env
+  case evaled of
+       Ok (Tuple (Proc f) _) -> f xs env
+       Ok (Tuple expr _) -> Error ("Can't evaluate using: " <> show expr)
+       Error e -> Error e
 eval' (List (Nil)) _ = Error ("Cannot evaluate empty list")
 eval' (Proc _)   _ = Error "Cannot eval procedure"
 eval' s    _ = Ok (Tuple s Nil)
