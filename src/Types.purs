@@ -13,6 +13,7 @@ instance showExpr :: Show Expr where
   show (Boolean b) = show b
   show (Proc _) = "Procedure"
   show (String s) = "\""<> s <>"\""
+  show (Quoted e) = "'" <> show e
   show (DottedList init rest) = "(" <> (intercalate " " <<< map show $ init) <> " . " <> show rest <> ")"
   show Null = "Null"
 
@@ -28,6 +29,7 @@ data Expr
   | String String
   | DottedList (List Expr) Expr
   | Boolean (Boolean)
+  | Quoted (Expr)
   | Null
 
 data Result a = Ok a

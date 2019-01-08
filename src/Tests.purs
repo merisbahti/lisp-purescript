@@ -47,6 +47,23 @@ main = runTest do
     test "lambdas" do
        Assert.equal (Ok (Int 3)) (readAndEval "((lambda (x) x) 3)")
        Assert.equal (Ok (Int 3)) (readAndEval "((lambda (x) (+ 1 x)) 2)")
+    test "cons" do
+       Assert.equal (Ok (List (Int 1 : Nil))) (readAndEval "(cons 1 '())")
+       Assert.equal (Ok (List (Int 1 : Int 2 : Int 3 : Nil))) (readAndEval "(cons 1 '(2 3))")
+       Assert.equal (Ok (List (Boolean true : Int 2 : Int 3 : Nil))) (readAndEval "(cons true '(2 3))")
+    test "car" do
+       Assert.equal (Ok (Int 1)) (readAndEval "(car '(1 2 3))")
+       Assert.equal (Ok (Int 1)) (readAndEval "(car (cons 1 '(2 3)))")
+       Assert.equal (Error ("Cannot car empty list")) (readAndEval "(car '())")
+    test "cdr" do
+       Assert.equal (Ok (List (Int 2 : Int 3 : Nil))) (readAndEval "(cdr '(1 2 3))")
+       Assert.equal (Ok (List (Int 2 : Int 3 : Nil))) (readAndEval "(cdr (cons 1 '(2 3)))")
+       Assert.equal (Error ("Cannot cdr empty list")) (readAndEval "(cdr '())")
+    test "lists" do
+       Assert.equal (Ok (Int 5)) (readAndEval "'5")
+       Assert.equal (Ok (List Nil)) (readAndEval "'()")
+       Assert.equal (Ok (List (Int 1 : Int 2 : Int 3 : Nil))) (readAndEval "'(1 2 3)")
+       Assert.equal (Ok (List ((Boolean true) : Nil))) (readAndEval "'(true)")
     test "define" do
        Assert.equal (Ok Null) (readAndEval "(define a 3)")
        Assert.equal (Ok Null) (readAndEval "(define a (+ 2 3))")

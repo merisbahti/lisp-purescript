@@ -52,7 +52,50 @@ stdLib = (
   Tuple "<" (Proc lt)
   ):(
   Tuple "=" (Proc eq)
+  ):(
+  Tuple "cons" (Proc cons)
+  ):(
+  Tuple "car" (Proc car)
+  ):(
+  Tuple "cdr" (Proc cdr)
   ) : Nil
+
+cons :: List Expr -> Env -> EvalResult
+cons (x : y : Nil) env = do
+  let head = evalEnvRemoved x env
+  let tail = evalEnvRemoved y env
+  case (Tuple head tail) of
+    Tuple (Ok e) (Ok (List (xs)))   -> Ok (Tuple (List (e : xs)) env)
+    Tuple (Ok a)           (Ok b)   -> Error ("Cannot cons " <> show a <> " to " <> show b)
+    Tuple (Error a)        _        -> Error a
+    Tuple _               (Error b) -> Error b
+cons _  _ = do
+  Error ("cons takes 2 arguments")
+
+
+car :: List Expr -> Env -> EvalResult
+car (x : Nil) env = do
+  let list = evalEnvRemoved x env
+  case list of
+       Ok (List xs) -> do
+          elem <- (maybeToResult $ head xs) <|> Error "Cannot car empty list"
+          pure $ Tuple elem env
+       Ok e         -> Error "Cannot car non-list."
+       Error e      -> Error e
+car _  _ = do
+  Error ("car takes 1 argument")
+
+cdr :: List Expr -> Env -> EvalResult
+cdr (x : Nil) env = do
+  let list = evalEnvRemoved x env
+  case list of
+       Ok (List xs) -> do
+          exprTail <- (maybeToResult $ tail xs) <|> Error "Cannot cdr empty list"
+          pure $ Tuple (List exprTail) env
+       Ok e         -> Error "Cannot cdr non-list."
+       Error e      -> Error e
+cdr _  _ = do
+  Error ("cdr takes 1 argument")
 
 lt :: List Expr -> Env -> EvalResult
 lt (lh:rh:_) env = do
@@ -184,7 +227,8 @@ eval' :: Expr -> Env -> EvalResult
 eval' (Atom s) env = do
   value <- lookupEnv s env
   pure $ Tuple value env
--- evaluate a list
+eval' (Quoted expr) env = do
+  pure $ Tuple expr env
 eval' (List ((Atom name):xs)) env = do
   let lookedUp = lookupEnv name env
   case lookedUp of

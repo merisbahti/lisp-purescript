@@ -56,6 +56,12 @@ parseDottedList = do
    rest <- whiteSpace *> parseAtom <* whiteSpace
    pure $ DottedList init rest
 
+parseQuoted :: SParser Expr -> SParser Expr
+parseQuoted pars = do
+   _ <- char '\''
+   rest <- pars
+   pure $ Quoted rest
+
 parseExpr :: SParser Expr
 parseExpr = fix $ \p -> whiteSpace *> (parseInt
                      <|> (do
@@ -64,6 +70,7 @@ parseExpr = fix $ \p -> whiteSpace *> (parseInt
                          _ <- char ')'
                          pure x)
                      <|> parseAtom
+                     <|> (parseQuoted p)
 ) <* whiteSpace
 
 readExpr :: String -> Result Expr
