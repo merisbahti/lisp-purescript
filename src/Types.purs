@@ -4,15 +4,15 @@ import Data.List
 
 import Control.Alternative (class Alt)
 import Data.Tuple (Tuple)
-import Prelude (class Applicative, class Apply, class Bind, class Functor, class Show, show, (<$>), (<>))
+import Prelude (class Applicative, class Apply, class Bind, class Functor, class Show, map, show, ($), (<$>), (<<<), (<>))
 
 instance showExpr :: Show Expr where
   show (Atom s) = s
-  show (List (x:xs)) = "(" <> foldl (\acc expr ->  acc <> " " <> (show expr)) (show x) xs <> ")"
-  show (List (nil)) = "()"
+  show (List xs) = "(" <> (intercalate " " <<< map show $ xs) <> ")"
   show (Int i) = show i
   show (Proc _) = "Procedure"
   show (String s) = "\""<> s <>"\""
+  show (DottedList init rest) = "(" <> (intercalate " " <<< map show $ init) <> " . " <> show rest <> ")"
 
 type EvalResult = Result (Tuple Expr Env)
 
@@ -24,6 +24,7 @@ data Expr
   | Int Int
   | Proc (List Expr -> Env -> EvalResult)
   | String String
+  | DottedList (List Expr) Expr
 
 data Result a = Ok a
               | Error String

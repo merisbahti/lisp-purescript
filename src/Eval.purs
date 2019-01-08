@@ -8,7 +8,6 @@ import Data.Maybe (Maybe(..))
 import Prelude (bind, show, ($), (+), (-), (<$>), (<>))
 import PsLisp (Env, EvalResult, Expr(..), Result(..))
 
-
 plus :: List Expr -> Env -> EvalResult
 plus = makeOperator op
   where op (Ok (Int x)) (Ok (Int y)) = Ok (Int (x + y))

@@ -18,7 +18,10 @@ main :: Effect Unit
 main = do
   log "Parsing"
   log (show $ readExpr "(+ 1 1 2)")
-  log (show $ readExpr "(+ 1 2 3)" >>= eval)
+  log (show $ readExpr "(+ 1 2 3)")
+  log (show $ readExpr "(a ())")
+  log (show $ readExpr "(a b . c)")
+  log (show $ readExpr """(a b . n)""")
   log "Evaulating"
   log (showResult $ readExpr "(a + 1)" >>= eval)
   log (showResult $ readExpr "(1 1 1)" >>= eval)

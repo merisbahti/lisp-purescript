@@ -12,8 +12,8 @@ import Data.Maybe (fromMaybe)
 import Data.String.CodeUnits (fromCharArray, toCharArray)
 import PsLisp (Expr(..), Result(..))
 import Text.Parsing.Parser (Parser, runParser)
-import Text.Parsing.Parser.Combinators (between, sepBy, try)
-import Text.Parsing.Parser.String (char, oneOf, satisfy, string, whiteSpace)
+import Text.Parsing.Parser.Combinators (sepBy, try)
+import Text.Parsing.Parser.String (char, oneOf, satisfy, whiteSpace)
 
 type SParser a = Parser String a
 
@@ -47,11 +47,18 @@ parseInt = do
 parseList :: SParser Expr -> SParser Expr
 parseList pars = List <$> pars `sepBy` whiteSpace
 
+parseDottedList :: SParser Expr
+parseDottedList = do
+   init <- many $ whiteSpace *> parseAtom <* whiteSpace
+   _ <- whiteSpace *> char '.' <* whiteSpace
+   rest <- whiteSpace *> parseAtom <* whiteSpace
+   pure $ DottedList init rest
+
 parseExpr :: SParser Expr
 parseExpr = fix $ \p -> (parseInt
                      <|> (do
                          _ <- char '('
-                         x <- try (parseList p)
+                         x <- (try parseDottedList <|> try (parseList p))
                          _ <- char ')'
                          pure x)
                      <|> parseAtom
