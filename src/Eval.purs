@@ -43,24 +43,34 @@ stdLib = (
   Tuple "lambda" (Proc lambda)
   ):(
   Tuple "-" (Proc minus)
+  ):(
+  Tuple "define" (Proc define)
   ) : Nil
+
+define :: List Expr -> Env -> EvalResult
+define (Atom(a):b:_) env = do
+  evaluated <- eval' b env
+  pure $ Tuple Null (defineInEnv (Tuple a (fst evaluated)) env)
+define (Atom(_):_) _ = Error ("Second arg to define missing, cannot define.")
+define _ _ = Error ("Define takes two args: variable to be bound and expression.")
+
 
 lambda :: List Expr -> Env -> EvalResult
 lambda exprs freeVars = do
   let args :: Result Expr
       args = maybeToResult $ head exprs
-  body <- maybeToResult $ tail exprs >>= head
+  block <- maybeToResult $ tail exprs
   varNames <- getVarNames <$> args
   -- TODO: assert that lambda takes 2 arguments for now.
   case varNames of
-       Ok (e) -> Ok (Tuple (Proc (newProc e body)) freeVars)
+       Ok (e) -> Ok (Tuple (Proc (newProc e block)) freeVars)
        Error (e) -> Error e
-     where newProc :: List String -> Expr -> List Expr -> Env -> EvalResult
+     where newProc :: List String -> List Expr -> List Expr -> Env -> EvalResult
            newProc varNames body boundExprs env = do
              evaluatedBoundExprs <- evaluateListOfExpressions boundExprs env
              let zippedArgs :: List (Tuple String Expr)
                  zippedArgs = zip varNames evaluatedBoundExprs
-             procEvalResult <- eval' body (defineMultipleInEnv zippedArgs env)
+             procEvalResult <- evalBlock body (defineMultipleInEnv zippedArgs env)
              pure $ case procEvalResult of
                       Tuple procExpr _ -> Tuple procExpr env
            getVarNames :: Expr -> Result (List String)
@@ -100,6 +110,15 @@ maybeToResult _ = Error "Lookup failed"
 
 eval :: Expr -> EvalResult
 eval e = eval' e stdLib
+
+evalBlock :: List Expr -> Env -> EvalResult
+evalBlock exprs startEnv = foldl step (Ok (Tuple Null startEnv )) exprs
+  where step :: EvalResult -> Expr -> EvalResult
+        step res expr = do
+           tuple <- res
+           let newEnv :: Env
+               newEnv = snd tuple
+           eval' expr newEnv
 
 eval' :: Expr -> Env -> EvalResult
 eval' (Atom s) env = do

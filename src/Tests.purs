@@ -44,3 +44,7 @@ main = runTest do
     test "lambdas" do
        Assert.equal (readAndEval "((lambda (x) x) 3)") (Ok (Int 3))
        Assert.equal (readAndEval "((lambda (x) (+ 1 x)) 2)") (Ok (Int 3))
+    test "define" do
+       Assert.equal (readAndEval "(define a 3)") (Ok Null)
+       Assert.equal (readAndEval "(define a (+ 2 3))") (Ok Null)
+       Assert.equal (readAndEval """((lambda (x) (define a (+ 2 3)) (+ a x)) 5)""") (Ok (Int 10))
