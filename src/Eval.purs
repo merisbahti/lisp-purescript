@@ -6,7 +6,7 @@ import Control.Alt ((<|>))
 import Data.List (List(..), filter, foldl, foldr, head, tail, zip, (:))
 import Data.Maybe (Maybe(..))
 import Data.Traversable (sequence)
-import Prelude (bind, map, pure, show, ($), (+), (-), (<$>), (<>), (==), (>>=))
+import Prelude (bind, map, pure, show, ($), (+), (-), (/=), (<$>), (<>))
 import PsLisp (Env, EvalResult, Expr(..), Result(..))
 
 plus :: List Expr -> Env -> EvalResult
@@ -92,7 +92,7 @@ lookupEnv :: String -> Env -> Result Expr
 lookupEnv name env = (maybeToResult $ lookup name env) <|> (Error ("Couldnt find \""<>name<>"\" in environment:" <> show env))
 
 defineInEnv :: (Tuple String Expr) -> Env -> Env
-defineInEnv e@(Tuple name expr) env = e : env
+defineInEnv e@(Tuple name expr) env = e : (filter (\x -> (fst x) /= name) env)
 
 defineMultipleInEnv :: List (Tuple String Expr) -> Env -> Env
 defineMultipleInEnv newVars env = foldr defineInEnv env newVars
