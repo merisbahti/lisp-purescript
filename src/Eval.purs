@@ -70,7 +70,7 @@ lambda exprs freeVars = do
              evaluatedBoundExprs <- evaluateListOfExpressions boundExprs env
              let zippedArgs :: List (Tuple String Expr)
                  zippedArgs = zip varNames evaluatedBoundExprs
-             procEvalResult <- evalBlock body (defineMultipleInEnv zippedArgs env)
+             procEvalResult <- evalBlock' body (defineMultipleInEnv zippedArgs env)
              pure $ case procEvalResult of
                       Tuple procExpr _ -> Tuple procExpr env
            getVarNames :: Expr -> Result (List String)
@@ -111,8 +111,11 @@ maybeToResult _ = Error "Lookup failed"
 eval :: Expr -> EvalResult
 eval e = eval' e stdLib
 
-evalBlock :: List Expr -> Env -> EvalResult
-evalBlock exprs startEnv = foldl step (Ok (Tuple Null startEnv )) exprs
+evalBlock :: List Expr -> EvalResult
+evalBlock exprs = evalBlock' exprs stdLib
+
+evalBlock' :: List Expr -> Env -> EvalResult
+evalBlock' exprs startEnv = foldl step (Ok (Tuple Null startEnv )) exprs
   where step :: EvalResult -> Expr -> EvalResult
         step res expr = do
            tuple <- res

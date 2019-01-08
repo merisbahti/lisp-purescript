@@ -55,16 +55,21 @@ parseDottedList = do
    pure $ DottedList init rest
 
 parseExpr :: SParser Expr
-parseExpr = fix $ \p -> (parseInt
+parseExpr = fix $ \p -> whiteSpace *> (parseInt
                      <|> (do
                          _ <- char '('
                          x <- (try parseDottedList <|> try (parseList p))
                          _ <- char ')'
                          pure x)
                      <|> parseAtom
-)
+) <* whiteSpace
 
 readExpr :: String -> Result Expr
-readExpr input = case runParser input (whiteSpace *> parseExpr) of
+readExpr input = case runParser input parseExpr of
+  Left err -> Error (show err)
+  Right value -> Ok value
+
+readProgram :: String -> Result (List Expr)
+readProgram input = case runParser input (many $ parseExpr) of
   Left err -> Error (show err)
   Right value -> Ok value
