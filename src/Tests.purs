@@ -142,7 +142,7 @@ main = runTest do
                       ))
                     (f 50)
                     """)
-       Assert.equal (Ok (Int 625))
+       Assert.equal (Ok (Int 100))
                     (readAndEval """
                     (define f
                       (lambda (x y)
@@ -151,7 +151,7 @@ main = runTest do
                           (true x)
                         )
                       ))
-                    (f 0 625)
+                    (f 0 100)
                     """)
        Assert.equal (Ok (Int 55))
                     (readAndEval """
@@ -172,4 +172,26 @@ main = runTest do
                           (true (fib-iter (- n 1) b (+ a b))))))
                     (define fib (lambda (n) (fib-iter n 0 1)))
                     (fib 40)
+                    """)
+    test "map" do
+       Assert.equal (Ok (List (Int 2 : Int 3 : Int 4 : Nil))) (readAndEval """
+                    (define map
+                      (lambda (f xs)
+                        (cond
+                          ((nil? xs) xs)
+                          (true (cons (f (car xs)) (map f (cdr xs))))
+                        )
+                    ))
+                    (map (lambda (x) (+ x 1)) '(1 2 3))
+                    """)
+
+       Assert.equal (Ok (List (Nil))) (readAndEval """
+                    (define map
+                      (lambda (f xs)
+                        (cond
+                          ((nil? xs) xs)
+                          (true (cons (f (car xs)) (map f (cdr xs))))
+                        )
+                    ))
+                    (map (lambda (x) (+ x 1)) '())
                     """)

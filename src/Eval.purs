@@ -58,6 +58,8 @@ stdLib = (
   Tuple "car" (Proc car)
   ):(
   Tuple "cdr" (Proc cdr)
+  ):(
+  Tuple "nil?" (Proc isNil)
   ) : Nil
 
 cons :: List Expr -> Env -> EvalResult
@@ -97,8 +99,16 @@ cdr (x : Nil) env = do
 cdr _  _ = do
   Error ("cdr takes 1 argument")
 
+isNil :: List Expr -> Env -> EvalResult
+isNil (e:Nil) env = do
+  evaledExpr <- evalEnvRemoved e env
+  pure $ case evaledExpr of
+               List(Nil) -> Tuple (Boolean true) env
+               _         -> Tuple (Boolean false) env
+isNil e _ = Error ("isNil takes only 1 arg")
+
 lt :: List Expr -> Env -> EvalResult
-lt (lh:rh:_) env = do
+lt (lh:rh:Nil) env = do
   lhEval <- evalEnvRemoved lh env
   rhEval <- evalEnvRemoved rh env
   pure $ case (Tuple lhEval rhEval) of
