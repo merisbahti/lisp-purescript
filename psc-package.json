@@ -6,6 +6,7 @@
     "console",
     "parsing",
     "prelude",
-    "psci-support"
+    "psci-support",
+    "test-unit"
   ]
 }
