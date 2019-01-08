@@ -24,3 +24,5 @@ main = do
   log (showResult $ readExpr "(1 1 1)" >>= eval)
   log (showResult $ readExpr "(+ 1 1)" >>= eval)
   log (showResult $ readExpr "(+ (+ 2 3) (+ 4 5))" >>= eval)
+  log (showResult $ readExpr "(+ (+ a 3) (+ 4 5))" >>= eval)
+  log (showResult $ readExpr "(- 3 2 1)" >>= eval)

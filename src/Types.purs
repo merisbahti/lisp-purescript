@@ -7,21 +7,23 @@ import Data.Tuple (Tuple)
 import Prelude (class Applicative, class Apply, class Bind, class Functor, class Show, show, (<$>), (<>))
 
 instance showExpr :: Show Expr where
-  show (AtomE s) = s
-  show (ListE (x:xs)) = "(" <> foldl (\acc expr ->  acc <> " " <> (show expr)) (show x) xs <> ")"
-  show (ListE (nil)) = "()"
-  show (IntE i) = show i
-  show (ProcE _) = "Procedure"
+  show (Atom s) = s
+  show (List (x:xs)) = "(" <> foldl (\acc expr ->  acc <> " " <> (show expr)) (show x) xs <> ")"
+  show (List (nil)) = "()"
+  show (Int i) = show i
+  show (Proc _) = "Procedure"
+  show (String s) = "\""<> s <>"\""
 
 type EvalResult = Result (Tuple Expr Env)
 
 type Env = List (Tuple String Expr)
 
 data Expr
-  = AtomE String
-  | ListE (List Expr)
-  | IntE Int
-  | ProcE (List Expr -> Env -> EvalResult)
+  = Atom String
+  | List (List Expr)
+  | Int Int
+  | Proc (List Expr -> Env -> EvalResult)
+  | String String
 
 data Result a = Ok a
               | Error String
