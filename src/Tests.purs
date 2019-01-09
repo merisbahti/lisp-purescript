@@ -3,25 +3,34 @@ module Test.Main where
 import Prelude
 
 import Data.List (List(..), (:))
-import Data.Tuple (Tuple(..))
+import Data.Tuple (Tuple(..), snd)
 import Effect (Effect)
-import PsLisp (Expr(..), Result(..))
-import PsLisp.Eval (evalBlock)
+import Effect.Aff (Aff)
+import Effect.Aff.Compat (fromEffectFnAff)
+import Node.Encoding (Encoding(..))
+import Node.FS.Aff as FS
+import PsLisp (Expr(..), Result(..), Env)
+import PsLisp.Eval (evalBlock', stdLib, defineMultipleInEnv)
 import PsLisp.Parse (readProgram, readExpr)
 import Test.Unit (suite, test)
 import Test.Unit.Assert as Assert
+import Test.Unit.Console (log, print)
 import Test.Unit.Main (runTest)
 
 evalResultEqualsExpr :: Result Expr -> Expr -> Boolean
 evalResultEqualsExpr (Ok e) expr = e == e
 evalResultEqualsExpr _ _ = false
 
-readAndEval :: String -> Result Expr
-readAndEval string = do
-  let fullResult = readProgram string >>= evalBlock
+readAndEvalWithLib :: String -> String -> Result Expr
+readAndEvalWithLib prelude string = do
+  preludeResult <- (readProgram prelude) >>= (flip evalBlock' $ stdLib)
+  let fullResult = (readProgram string) >>= (flip evalBlock' $ defineMultipleInEnv (snd preludeResult) stdLib)
   case fullResult of
        Ok (Tuple expr _) -> Ok expr
        Error e           -> Error e
+
+preludePath :: String
+preludePath = "./src/prelude.lisp"
 
 main :: Effect Unit
 main = runTest do
@@ -39,36 +48,54 @@ main = runTest do
       Assert.equal (readExpr "(+ 1 2 3") (Error "(ParseError \"Expected ')'\" (Position { line: 1, column: 9 }))")
   suite "evaluating" do
     test "Eval arithmetic" do
+       filecontents <- (FS.readTextFile) UTF8 preludePath
+       let readAndEval = readAndEvalWithLib filecontents
        Assert.equal (Ok (Int 3)) (readAndEval "(+ 1 2)")
        Assert.equal (Ok (Int 5)) (readAndEval "(+ (+ 1 2) 2)")
        Assert.equal (Ok (Int 10)) (readAndEval "(+ (+ 1 2) (+ 3 4))")
        Assert.equal (Ok (Int 2)) (readAndEval "(+ (+ 1 2) (- 3 4))")
        Assert.equal (Ok (Int 0)) (readAndEval "(- 3 2 1)")
     test "lambdas" do
-       Assert.equal (Ok (Int 3)) (readAndEval "((lambda (x) x) 3)")
+       filecontents <- (FS.readTextFile) UTF8 preludePath
+       let readAndEval = readAndEvalWithLib filecontents
+       Assert.equal (Ok (Int 3)) (readAndEval """
+                    ((lambda (x) x) 3)
+                    """)
        Assert.equal (Ok (Int 3)) (readAndEval "((lambda (x) (+ 1 x)) 2)")
     test "non-dotted lambda errors" do
+       filecontents <- (FS.readTextFile) UTF8 preludePath
+       let readAndEval = readAndEvalWithLib filecontents
        Assert.equal (Error "\"1\" cannot be bound to a variable") (readAndEval "((lambda (1) (+ 1 x)) 2)")
        Assert.equal (Error "Variable list must be list of atoms, found: \"1\"") (readAndEval "((lambda 1 (+ 1 x)) 2)")
        Assert.equal (Error "Variable list must be list of atoms, found: \"a\"") (readAndEval "((lambda a (+ 1 x)) 2)")
     test "cons" do
+       filecontents <- (FS.readTextFile) UTF8 preludePath
+       let readAndEval = readAndEvalWithLib filecontents
        Assert.equal (Ok (List (Int 1 : Nil))) (readAndEval "(cons 1 '())")
        Assert.equal (Ok (List (Int 1 : Int 2 : Int 3 : Nil))) (readAndEval "(cons 1 '(2 3))")
        Assert.equal (Ok (List (Boolean true : Int 2 : Int 3 : Nil))) (readAndEval "(cons true '(2 3))")
     test "car" do
+       filecontents <- (FS.readTextFile) UTF8 preludePath
+       let readAndEval = readAndEvalWithLib filecontents
        Assert.equal (Ok (Int 1)) (readAndEval "(car '(1 2 3))")
        Assert.equal (Ok (Int 1)) (readAndEval "(car (cons 1 '(2 3)))")
        Assert.equal (Error ("Cannot car empty list")) (readAndEval "(car '())")
     test "cdr" do
+       filecontents <- (FS.readTextFile) UTF8 preludePath
+       let readAndEval = readAndEvalWithLib filecontents
        Assert.equal (Ok (List (Int 2 : Int 3 : Nil))) (readAndEval "(cdr '(1 2 3))")
        Assert.equal (Ok (List (Int 2 : Int 3 : Nil))) (readAndEval "(cdr (cons 1 '(2 3)))")
        Assert.equal (Error ("Cannot cdr empty list")) (readAndEval "(cdr '())")
     test "lists" do
+       filecontents <- (FS.readTextFile) UTF8 preludePath
+       let readAndEval = readAndEvalWithLib filecontents
        Assert.equal (Ok (Int 5)) (readAndEval "'5")
        Assert.equal (Ok (List Nil)) (readAndEval "'()")
        Assert.equal (Ok (List (Int 1 : Int 2 : Int 3 : Nil))) (readAndEval "'(1 2 3)")
        Assert.equal (Ok (List ((Boolean true) : Nil))) (readAndEval "'(true)")
     test "define" do
+       filecontents <- (FS.readTextFile) UTF8 preludePath
+       let readAndEval = readAndEvalWithLib filecontents
        Assert.equal (Ok Null) (readAndEval "(define a 3)")
        Assert.equal (Ok Null) (readAndEval "(define a (+ 2 3))")
        Assert.equal (Ok (Int 10)) (readAndEval """
@@ -178,6 +205,8 @@ main = runTest do
                     (fib 40)
                     """)
     test "map" do
+       filecontents <- (FS.readTextFile) UTF8 preludePath
+       let readAndEval = readAndEvalWithLib filecontents
        Assert.equal (Ok (List (Int 2 : Int 3 : Int 4 : Nil))) (readAndEval """
                     (define map
                       (lambda (f xs)
@@ -200,6 +229,8 @@ main = runTest do
                     (map (lambda (x) (+ x 1)) '())
                     """)
     test "dotted lists" do
+       filecontents <- (FS.readTextFile) UTF8 preludePath
+       let readAndEval = readAndEvalWithLib filecontents
        Assert.equal (Ok (List (Int 1 : Int 2 : Int 3 : Nil))) (readAndEval """
                     (define lizt
                       (lambda (x . xs)

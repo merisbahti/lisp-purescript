@@ -4,6 +4,7 @@
   "source": "https://github.com/purescript/package-sets.git",
   "depends": [
     "console",
+    "node-fs-aff",
     "parsing",
     "prelude",
     "psci-support",

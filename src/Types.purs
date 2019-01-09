@@ -4,7 +4,7 @@ import Data.List
 
 import Control.Alternative (class Alt)
 import Data.Tuple (Tuple)
-import Prelude (class Applicative, class Apply, class Bind, class Eq, class Functor, class Show, map, show, ($), (<$>), (<<<), (<>), (==))
+import Prelude (class Applicative, class Apply, class Bind, class Eq, class Functor, class Show, map, show, ($), (&&), (<$>), (<<<), (<>), (==))
 
 instance showExpr :: Show Expr where
   show (Atom s) = s
@@ -35,14 +35,17 @@ data Expr
 data Result a = Ok a
               | Error String
 
+-- This is intended to be used for comparison of AST, and not values.
 instance eqExpr :: Eq Expr where
-  eq (Int a)        (Int b)     = a == b
-  eq (Atom a)       (Atom b)    = a == b
-  eq (Boolean a)    (Boolean b) = a == b
-  eq (Null)         (Null)      = true
-  eq (List a)       (List b)    = a == b
-  eq (String a)     (String b)  = a == b
-  eq _              _           = false
+  eq (Atom a)         (Atom b)         = a == b
+  eq (List a)         (List b)         = a == b
+  eq (Int a)          (Int b)          = a == b
+  eq (Boolean a)      (Boolean b)      = a == b
+  eq (Null)           (Null)           = true
+  eq (String a)       (String b)       = a == b
+  eq (DottedList a x) (DottedList b y) = a == b && x == y
+  eq _                _                = false
+
 
 instance eqResult :: Eq a => Eq (Result a) where
   eq (Ok a)       (Ok b) = a == b

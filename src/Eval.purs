@@ -3,47 +3,20 @@ module PsLisp.Eval where
 import Data.Tuple
 
 import Control.Alt (alt, (<|>))
-import Control.MonadPlus ((>>=))
 import Data.List (List(..), filter, foldl, foldr, head, length, slice, tail, zip, (:))
 import Data.Maybe (Maybe(..))
 import Data.Traversable (sequence)
 import Prelude (bind, map, pure, show, ($), (+), (-), (/=), (<), (<$>), (<>), (==))
 import PsLisp (Env, EvalResult, Expr(..), Result(..))
 
-plus :: List Expr -> Env -> EvalResult
-plus = makeOperator op
-  where op (Ok (Int x)) (Ok (Int y)) = Ok (Int (x + y))
-        op (Error e)                 _ = Error (e)
-        op _                 (Error e) = Error (e)
-        op (Ok x)               (Ok y) = Error ("Can't add value: " <> show x <> " with value " <> show y)
-
-minus :: List Expr -> Env -> EvalResult
-minus = makeOperator op
-  where op (Ok (Int x)) (Ok (Int y)) = Ok (Int (x - y))
-        op (Error e)                 _ = Error (e)
-        op _                 (Error e) = Error (e)
-        op (Ok x)               (Ok y) = Error ("Can't minus value: " <> show x <> " with value " <> show y)
-
-makeOperator :: (Result Expr -> Result Expr -> Result Expr) -> List Expr -> Env -> EvalResult
-makeOperator operator xs env = do
-  let evaluatedList = evaluateList xs env
-  addEnvToExprResult (foldResultExprList operator evaluatedList) env
-
-foldResultExprList :: (Result Expr -> Result Expr -> Result Expr) -> List (Result Expr) -> Result Expr
-foldResultExprList f (x:xs) = foldr f x xs
-foldResultExprList f (Nil) = Error "Cannot evaluate empty list"
-
-evaluateList :: List Expr -> Env -> List (Result Expr)
-evaluateList xs env = foldl (\acc x -> (fst <$> eval' x env) : acc ) Nil xs
-  where evaluateAndGetExpr x = getExprFromEvalResult $ eval' x env
 
 stdLib :: Env
 stdLib = (
-  Tuple "+" (Proc plus)
+  Tuple "int-plus" (Proc plus)
   ):(
   Tuple "lambda" (Proc lambda)
   ):(
-  Tuple "-" (Proc minus)
+  Tuple "int-minus" (Proc minus)
   ):(
   Tuple "define" (Proc define)
   ):(
@@ -62,69 +35,73 @@ stdLib = (
   Tuple "nil?" (Proc isNil)
   ) : Nil
 
-cons :: List Expr -> Env -> EvalResult
-cons (x : y : Nil) env = do
-  let head = evalEnvRemoved x env
-  let tail = evalEnvRemoved y env
-  case (Tuple head tail) of
-    Tuple (Ok e) (Ok (List (xs)))   -> Ok (Tuple (List (e : xs)) env)
-    Tuple (Ok a)           (Ok b)   -> Error ("Cannot cons " <> show a <> " to " <> show b)
-    Tuple (Error a)        _        -> Error a
-    Tuple _               (Error b) -> Error b
-cons _  _ = do
-  Error ("cons takes 2 arguments")
+plus :: List Expr -> Env -> EvalResult
+plus = makeBinOp op
+  where op (Int x) (Int y)  = Ok $ Int (x + y)
+        op x       y        = Error ("Can't plus value: " <> show x <> " with value " <> show y)
 
+minus :: List Expr -> Env -> EvalResult
+minus = makeBinOp op
+  where op (Int x) (Int y)  = Ok $ Int (x - y)
+        op x       y        = Error ("Can't minus value: " <> show x <> " with value " <> show y)
+
+makeBinOp :: (Expr -> Expr -> Result Expr) -> List Expr -> Env -> EvalResult
+makeBinOp op (lh:rh:Nil) env = do
+  lhEval <- evaluateAndGetExpr lh env
+  rhEval <- evaluateAndGetExpr rh env
+  addEnvToExprResult (op lhEval rhEval) env
+makeBinOp _ _ _ = Error "More than one arg passed to binary operator"
+
+makeUnaryOp :: (Expr -> Result Expr) -> List Expr -> Env -> EvalResult
+makeUnaryOp op (x : Nil) env = do
+  lh <- evalEnvRemoved x env
+  addEnvToExprResult (op lh) env
+makeUnaryOp _ _ _ = do
+  Error ("Unary operator takes 1 argument")
+
+foldResultExprList :: (Result Expr -> Result Expr -> Result Expr) -> List (Result Expr) -> Result Expr
+foldResultExprList f (x:xs) = foldr f x xs
+foldResultExprList f (Nil) = Error "Cannot evaluate empty list"
+
+evaluateList :: List Expr -> Env -> List (Result Expr)
+evaluateList xs env = foldl (\acc x -> (fst <$> eval' x env) : acc ) Nil xs
+
+evaluateAndGetExpr :: Expr -> Env -> Result Expr
+evaluateAndGetExpr x env = getExprFromEvalResult $ eval' x env
+
+cons :: List Expr -> Env -> EvalResult
+cons = makeBinOp op
+  where op x (List xs) = Ok $ List (x : xs)
+        op a b         = Error ("Cannot cons " <> show a <> " to " <> show b)
 
 car :: List Expr -> Env -> EvalResult
-car (x : Nil) env = do
-  let list = evalEnvRemoved x env
-  case list of
-       Ok (List xs) -> do
+car = makeUnaryOp op
+  where op (List xs) = do
           elem <- (maybeToResult $ head xs) <|> Error "Cannot car empty list"
-          pure $ Tuple elem env
-       Ok e         -> Error "Cannot car non-list."
-       Error e      -> Error e
-car _  _ = do
-  Error ("car takes 1 argument")
+          pure $ elem
+        op _         = Error "car can only be used on 1 argument"
 
 cdr :: List Expr -> Env -> EvalResult
-cdr (x : Nil) env = do
-  let list = evalEnvRemoved x env
-  case list of
-       Ok (List xs) -> do
-          exprTail <- (maybeToResult $ tail xs) <|> Error "Cannot cdr empty list"
-          pure $ Tuple (List exprTail) env
-       Ok e         -> Error "Cannot cdr non-list."
-       Error e      -> Error e
-cdr _  _ = do
-  Error ("cdr takes 1 argument")
+cdr = makeUnaryOp op
+  where op (List xs) = do
+          elem <- (maybeToResult $ tail xs) <|> Error "Cannot cdr empty list"
+          pure $ List (elem)
+        op _         = Error "Cannot cdr empty list"
 
 isNil :: List Expr -> Env -> EvalResult
-isNil (e:Nil) env = do
-  evaledExpr <- evalEnvRemoved e env
-  pure $ case evaledExpr of
-               List(Nil) -> Tuple (Boolean true) env
-               _         -> Tuple (Boolean false) env
-isNil e _ = Error ("isNil takes only 1 arg")
+isNil = makeUnaryOp op
+  where op (List Nil) = Ok $ Boolean true
+        op _          = Ok $ Boolean false
 
 lt :: List Expr -> Env -> EvalResult
-lt (lh:rh:Nil) env = do
-  lhEval <- evalEnvRemoved lh env
-  rhEval <- evalEnvRemoved rh env
-  pure $ case (Tuple lhEval rhEval) of
-               Tuple (Int a) (Int b) -> Tuple (Boolean (a < b)) env
-               Tuple _       _       -> Tuple (Boolean false) env
-lt _ _ = Error ("Operator \"<\" takes only 2 args.")
+lt = makeBinOp op
+  where op (Int a) (Int b) = Ok $ Boolean (a < b)
+        op a b             = Error ("Cannot compare " <> show a <> " to " <> show b)
 
 eq :: List Expr -> Env -> EvalResult
-eq (lh:rh:_) env = do
-  lhEval <- evalEnvRemoved lh env
-  rhEval <- evalEnvRemoved rh env
-  pure $ case (Tuple lhEval rhEval) of
-               Tuple (Int a) (Int b)         -> Tuple (Boolean (a == b)) env
-               Tuple (Boolean a) (Boolean b) -> Tuple (Boolean (a == b)) env
-               Tuple _       _               -> Tuple (Boolean false) env
-eq _ _ = Error ("Operator \"=\" takes only 2 args.")
+eq = makeBinOp op
+  where op (Int a) (Int b) = Ok $ Boolean (a == b)
+        op a b             = Error ("Cannot compare " <> show a <> " to " <> show b)
 
 evalEnvRemoved :: Expr -> Env -> Result Expr
 evalEnvRemoved expr env = do
@@ -227,7 +204,7 @@ lookupEnv name env = (maybeToResult $ lookup name env) <|> (Error ("Couldnt find
 defineInEnv :: (Tuple String Expr) -> Env -> Env
 defineInEnv e@(Tuple name expr) env = e : (filter (\x -> (fst x) /= name) env)
 
-defineMultipleInEnv :: List (Tuple String Expr) -> Env -> Env
+defineMultipleInEnv :: Env -> Env -> Env
 defineMultipleInEnv newVars env = foldr defineInEnv env newVars
 
 getExprFromEvalResult :: EvalResult -> Result Expr
