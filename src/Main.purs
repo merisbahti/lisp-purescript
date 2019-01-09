@@ -2,12 +2,11 @@ module Main where
 
 import Prelude
 
-import Data.List (List(..), (:))
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Console (log)
-import PsLisp (EvalResult, Expr(..), Result(..))
-import PsLisp.Eval (eval, defineInEnv, defineMultipleInEnv)
+import PsLisp (EvalResult, Result(..))
+import PsLisp.Eval (eval)
 import PsLisp.Parse (readExpr)
 
 showResultExpr :: EvalResult -> String
