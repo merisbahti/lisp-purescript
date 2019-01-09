@@ -168,13 +168,10 @@ define _ _ = Error ("Define takes two args: variable to be bound and expression.
 
 lambda :: List Expr -> Env -> EvalResult
 lambda exprs freeVars = do
-  let args :: Result Expr
-      args = maybeToResult $ head exprs
+  args <- maybeToResult $ head exprs
   block <- maybeToResult $ tail exprs
-  varNames <- getVarNames <$> args
-  case varNames of
-       Ok (e) -> Ok (Tuple (Proc (newProc e block)) freeVars)
-       Error (e) -> Error e
+  varNames <- getVarNames args
+  pure $ Tuple (Proc (newProc varNames block)) freeVars
      where newProc :: List String -> List Expr -> List Expr -> Env -> EvalResult
            newProc varNames body boundExprs env = do
              evaluatedBoundExprs <- evaluateListOfExpressions boundExprs env
@@ -184,18 +181,16 @@ lambda exprs freeVars = do
              pure $ case procEvalResult of
                       Tuple procExpr _ -> Tuple procExpr env
            getVarNames :: Expr -> Result (List String)
-           getVarNames (List(Atom(x):xs)) = do
+           getVarNames (List (Atom(x):xs)) = do
               rest <- getVarNames(List(xs))
-              pure (x : rest)
-           getVarNames (List(Nil)) = Ok (Nil)
-           getVarNames (List(x:xs)) = Error ("\"" <> show x <> "\"" <> "Cannot be bound to a variable")
-           getVarNames (x) = Error ("Variable list must be list, found: \"" <> show x)
+              pure $ x : rest
+           getVarNames (List Nil)  = Ok (Nil)
+           getVarNames (List (x:xs)) = Error ("\"" <> show x <> "\"" <> "Cannot be bound to a variable")
+           getVarNames x = Error ("Variable list must be list, found: \"" <> show x <> "\"")
 
            evaluateListOfExpressions :: List Expr -> Env -> Result (List Expr)
            evaluateListOfExpressions exprList env = do
-               sequence $ map evalAndGetExpr exprList
-                  where evalAndGetExpr :: Expr -> Result Expr
-                        evalAndGetExpr expr = fst <$> (eval' expr env)
+               sequence $ map (\x -> evalEnvRemoved x env) exprList
 
 
 lookupEnv :: String -> Env -> Result Expr
