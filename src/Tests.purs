@@ -47,6 +47,10 @@ main = runTest do
     test "lambdas" do
        Assert.equal (Ok (Int 3)) (readAndEval "((lambda (x) x) 3)")
        Assert.equal (Ok (Int 3)) (readAndEval "((lambda (x) (+ 1 x)) 2)")
+    test "non-dotted lambda errors" do
+       Assert.equal (Error "\"1\" cannot be bound to a variable") (readAndEval "((lambda (1) (+ 1 x)) 2)")
+       Assert.equal (Error "Variable list must be list of atoms, found: \"1\"") (readAndEval "((lambda 1 (+ 1 x)) 2)")
+       Assert.equal (Error "Variable list must be list of atoms, found: \"a\"") (readAndEval "((lambda a (+ 1 x)) 2)")
     test "cons" do
        Assert.equal (Ok (List (Int 1 : Nil))) (readAndEval "(cons 1 '())")
        Assert.equal (Ok (List (Int 1 : Int 2 : Int 3 : Nil))) (readAndEval "(cons 1 '(2 3))")

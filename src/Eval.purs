@@ -170,11 +170,11 @@ lambda exprs freeVars = do
   args <- maybeToResult $ head exprs
   block <- maybeToResult $ tail exprs
   alt (do
-      varNames <- getVarAtoms args
-      pure $ Tuple (Proc (newProc varNames block)) freeVars
+      varDottedList <- getVarDottedList args
+      pure $ Tuple (Proc (newDottedListProc varDottedList block)) freeVars
       ) (do
-        varDottedList <- getVarDottedList args
-        pure $ Tuple (Proc (newDottedListProc varDottedList block)) freeVars
+        varNames <- getVarAtoms args
+        pure $ Tuple (Proc (newProc varNames block)) freeVars
         )
      where newProc :: List String -> List Expr -> List Expr -> Env -> EvalResult
            newProc varNames body boundExprs env = do
@@ -189,8 +189,8 @@ lambda exprs freeVars = do
               rest <- getVarAtoms (List(xs))
               pure $ x : rest
            getVarAtoms (List Nil)  = Ok (Nil)
-           getVarAtoms (List (x:xs)) = Error ("\"" <> show x <> "\"" <> "Cannot be bound to a variable")
-           getVarAtoms x = Error ("Variable list must be list, found: \"" <> show x <> "\"")
+           getVarAtoms (List (x:xs)) = Error ("\"" <> show x <> "\"" <> " cannot be bound to a variable")
+           getVarAtoms x = Error ("Variable list must be list of atoms, found: \"" <> show x <> "\"")
            getVarDottedList :: Expr -> Result (Tuple (List String) String)
            getVarDottedList (DottedList init rest) = do
               initArgs <- exprListToStrings init
@@ -202,8 +202,8 @@ lambda exprs freeVars = do
                       exprListToStrings ((Atom x):xs) = do
                         tail <- exprListToStrings xs
                         pure $ x : tail
-                      exprListToStrings _ = Error "Canndostuff"
-           getVarDottedList  _ = (Error "Not dotted list")
+                      exprListToStrings other = Error $ "Expected atom in dotted list found " <> show other
+           getVarDottedList  _ = Error "Not dotted list"
            newDottedListProc :: Tuple (List String) String -> List Expr -> List Expr -> Env -> EvalResult
            newDottedListProc dottedList body boundExprs env = do
               evaluatedBoundExprs <- evaluateListOfExpressions boundExprs env
