@@ -4,7 +4,7 @@ import Data.Tuple
 
 import Control.Alt (alt, (<|>))
 import Control.MonadPlus ((>>=))
-import Data.List (List(..), filter, foldl, foldr, head, tail, zip, (:))
+import Data.List (List(..), filter, foldl, foldr, head, length, slice, tail, zip, (:))
 import Data.Maybe (Maybe(..))
 import Data.Traversable (sequence)
 import Prelude (bind, map, pure, show, ($), (+), (-), (/=), (<), (<$>), (<>), (==))
@@ -170,8 +170,13 @@ lambda :: List Expr -> Env -> EvalResult
 lambda exprs freeVars = do
   args <- maybeToResult $ head exprs
   block <- maybeToResult $ tail exprs
-  varNames <- getVarNames args
-  pure $ Tuple (Proc (newProc varNames block)) freeVars
+  alt (do
+      varNames <- getVarAtoms args
+      pure $ Tuple (Proc (newProc varNames block)) freeVars
+      ) (do
+        varDottedList <- getVarDottedList args
+        pure $ Tuple (Proc (newDottedListProc varDottedList block)) freeVars
+        )
      where newProc :: List String -> List Expr -> List Expr -> Env -> EvalResult
            newProc varNames body boundExprs env = do
              evaluatedBoundExprs <- evaluateListOfExpressions boundExprs env
@@ -180,17 +185,41 @@ lambda exprs freeVars = do
              procEvalResult <- evalBlock' body (defineMultipleInEnv zippedArgs env)
              pure $ case procEvalResult of
                       Tuple procExpr _ -> Tuple procExpr env
-           getVarNames :: Expr -> Result (List String)
-           getVarNames (List (Atom(x):xs)) = do
-              rest <- getVarNames(List(xs))
+           getVarAtoms :: Expr -> Result (List String)
+           getVarAtoms (List (Atom(x):xs)) = do
+              rest <- getVarAtoms (List(xs))
               pure $ x : rest
-           getVarNames (List Nil)  = Ok (Nil)
-           getVarNames (List (x:xs)) = Error ("\"" <> show x <> "\"" <> "Cannot be bound to a variable")
-           getVarNames x = Error ("Variable list must be list, found: \"" <> show x <> "\"")
+           getVarAtoms (List Nil)  = Ok (Nil)
+           getVarAtoms (List (x:xs)) = Error ("\"" <> show x <> "\"" <> "Cannot be bound to a variable")
+           getVarAtoms x = Error ("Variable list must be list, found: \"" <> show x <> "\"")
+           getVarDottedList :: Expr -> Result (Tuple (List String) String)
+           getVarDottedList (DottedList init rest) = do
+              initArgs <- exprListToStrings init
+              case rest of
+                   Atom restVar  -> Ok (Tuple initArgs restVar)
+                   o             -> Error $ "Rest in dotted list must be atom, found: " <> show o
+                where exprListToStrings :: List Expr -> Result (List String)
+                      exprListToStrings (Nil) = Ok Nil
+                      exprListToStrings ((Atom x):xs) = do
+                        tail <- exprListToStrings xs
+                        pure $ x : tail
+                      exprListToStrings _ = Error "Canndostuff"
+           getVarDottedList  _ = (Error "Not dotted list")
+           newDottedListProc :: Tuple (List String) String -> List Expr -> List Expr -> Env -> EvalResult
+           newDottedListProc dottedList body boundExprs env = do
+              evaluatedBoundExprs <- evaluateListOfExpressions boundExprs env
+              let zippedInitArgs :: List (Tuple String Expr)
+                  zippedInitArgs = zip (fst dottedList) evaluatedBoundExprs
+              let restArgs :: Tuple String Expr
+                  restArgs = Tuple (snd dottedList) (List (slice (length zippedInitArgs) (length boundExprs) evaluatedBoundExprs))
+              procEvalResult <- evalBlock' body (defineMultipleInEnv (restArgs : zippedInitArgs) env)
+              pure $ case procEvalResult of
+                          Tuple procExpr _ -> Tuple procExpr env
 
-           evaluateListOfExpressions :: List Expr -> Env -> Result (List Expr)
-           evaluateListOfExpressions exprList env = do
-               sequence $ map (\x -> evalEnvRemoved x env) exprList
+
+evaluateListOfExpressions :: List Expr -> Env -> Result (List Expr)
+evaluateListOfExpressions exprList env = do
+   sequence $ map (\x -> evalEnvRemoved x env) exprList
 
 
 lookupEnv :: String -> Env -> Result Expr

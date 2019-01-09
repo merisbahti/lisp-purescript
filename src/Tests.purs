@@ -195,3 +195,22 @@ main = runTest do
                     ))
                     (map (lambda (x) (+ x 1)) '())
                     """)
+    test "dotted lists" do
+       Assert.equal (Ok (List (Int 1 : Int 2 : Int 3 : Nil))) (readAndEval """
+                    (define lizt
+                      (lambda (x . xs)
+                          (cons x xs)))
+                    (lizt 1 2 3)
+                    """)
+       Assert.equal (Ok (Int (-1))) (readAndEval """
+                    (define minus
+                      (lambda (x y . xs)
+                          (- x y)))
+                    (minus 2 3)
+                    """)
+       Assert.equal (Error "Can't minus value: 2 with value (3)") (readAndEval """
+                    (define minus
+                      (lambda (x . xs)
+                          (- x xs)))
+                    (minus 2 3)
+                    """)
