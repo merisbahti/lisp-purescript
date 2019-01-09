@@ -143,12 +143,11 @@ cond exprs env = do
                Error e      -> Error e
           where reducer :: Result (Maybe Expr) -> (Tuple Expr Expr) -> Result (Maybe Expr)
                 reducer (Ok (Just a))                  _  = Ok (Just a)
-                reducer (Ok (Nothing)) (Tuple pred cons)  = (
-                case eval' pred env of
-                     Ok (Tuple (Boolean true) _) -> Ok (Just cons)
-                     Ok (Tuple _ _ )  -> Ok Nothing
-                     Error e -> Error e
-                     )
+                reducer (Ok (Nothing)) (Tuple pred consequent)  = do
+                   evaledPred <- evalEnvRemoved pred env
+                   pure $ case evaledPred of
+                        Boolean true -> Just consequent
+                        _  -> Nothing
                 reducer a                               _ = a
         getCondPairs :: List Expr -> Result (List (Tuple Expr Expr))
         getCondPairs pairs = do
