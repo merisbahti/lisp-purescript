@@ -3,10 +3,11 @@ module PsLisp.Eval where
 import Data.Tuple
 
 import Control.Alt (alt, (<|>))
+import Control.MonadPlus (guard)
 import Data.List (List(..), filter, foldl, foldr, head, length, slice, tail, zip, (:))
 import Data.Maybe (Maybe(..))
 import Data.Traversable (sequence)
-import Prelude (bind, map, pure, show, ($), (+), (-), (/=), (<), (<$>), (<>), (==))
+import Prelude (bind, map, pure, show, ($), (+), (-), (/=), (<), (<$>), (<=), (<>), (==))
 import PsLisp (Env, EvalResult, Expr(..), Result(..))
 
 
@@ -157,12 +158,13 @@ lambda exprs freeVars = do
        e -> Error ("Expected list of args, found: " <> show e)
      where newProc :: List String -> List Expr -> List Expr -> Env -> EvalResult
            newProc varNames body boundExprs env = do
-             evaluatedBoundExprs <- evaluateListOfExpressions boundExprs env
-             let zippedArgs :: List (Tuple String Expr)
-                 zippedArgs = zip varNames evaluatedBoundExprs
-             procEvalResult <- evalBlock' body (defineMultipleInEnv zippedArgs env)
-             pure $ case procEvalResult of
-                      Tuple procExpr _ -> Tuple procExpr env
+             let blen = length boundExprs
+             let vlen = length varNames
+             _ <- maybeToResult (guard $ vlen == blen ) <|> Error ("Expected nr of args: " <> show vlen <> " but got: " <> show blen)
+             evaluatedBoundExprs <- evaluateListOfExpressions boundExprs freeVars
+             let zippedArgs = zip varNames evaluatedBoundExprs
+             procEvalResult <- evalBlock' body (defineMultipleInEnv zippedArgs freeVars)
+             pure $ Tuple (fst procEvalResult) freeVars
            getVarAtoms :: List Expr -> Result (List String)
            getVarAtoms (x:xs) = do
               atom <- (getStringFromAtom x)
@@ -173,15 +175,17 @@ lambda exprs freeVars = do
            getStringFromAtom (Atom x) = pure x
            getStringFromAtom e        = Error ("Cannot bind " <> show e <> " to variable")
            newDottedListProc :: Tuple (List String) String -> List Expr -> List Expr -> Env -> EvalResult
-           newDottedListProc dottedList body boundExprs env = do
+           newDottedListProc (Tuple varNames restVars) body boundExprs env = do
+              let blen = length boundExprs
+              let vlen = length varNames
+              _ <- maybeToResult (guard $ vlen <= blen ) <|> Error ("Expected nr of args: " <> show vlen <> " but got: " <> show blen)
               evaluatedBoundExprs <- evaluateListOfExpressions boundExprs env
               let zippedInitArgs :: List (Tuple String Expr)
-                  zippedInitArgs = zip (fst dottedList) evaluatedBoundExprs
+                  zippedInitArgs = zip varNames evaluatedBoundExprs
               let restArgs :: Tuple String Expr
-                  restArgs = Tuple (snd dottedList) (List (slice (length zippedInitArgs) (length boundExprs) evaluatedBoundExprs))
+                  restArgs = Tuple restVars (List (slice (length zippedInitArgs) (length boundExprs) evaluatedBoundExprs))
               procEvalResult <- evalBlock' body (defineMultipleInEnv (restArgs : zippedInitArgs) env)
-              pure $ case procEvalResult of
-                          Tuple procExpr _ -> Tuple procExpr env
+              pure $ Tuple (fst procEvalResult) freeVars
 
 
 evaluateListOfExpressions :: List Expr -> Env -> Result (List Expr)
@@ -211,9 +215,6 @@ maybeToResult _ = Error "Lookup failed"
 
 eval :: Expr -> EvalResult
 eval e = eval' e stdLib
-
-evalBlock :: List Expr -> EvalResult
-evalBlock exprs = evalBlock' exprs stdLib
 
 evalBlock' :: List Expr -> Env -> EvalResult
 evalBlock' exprs startEnv = foldl step (Ok (Tuple Null startEnv )) exprs

@@ -62,6 +62,16 @@ main = runTest do
                     ((lambda (x) x) 3)
                     """)
        Assert.equal (Ok (Int 3)) (readAndEval "((lambda (x) (+ 1 x)) 2)")
+       Assert.equal (Error "Expected nr of args: 2 but got: 1") (readAndEval """
+                    (define f (lambda (x a . xs)
+                    (int-plus x a)))
+                    (f 1)
+                    """)
+       Assert.equal (Ok (Int 3)) (readAndEval """
+                    (define f (lambda (x a . xs)
+                    (int-plus x a)))
+                    (f 1 2 3 4)
+                    """)
     test "non-dotted lambda errors" do
        filecontents <- (FS.readTextFile) UTF8 preludePath
        let readAndEval = readAndEvalWithLib filecontents
@@ -179,7 +189,7 @@ main = runTest do
                     (define f
                       (lambda (x y)
                         (cond
-                          ((< x y) (f (+ 1 x)))
+                          ((< x y) (f (+ 1 x) 100))
                           (true x)
                         )
                       ))
@@ -204,6 +214,12 @@ main = runTest do
                           (true (fib-iter (- n 1) b (+ a b))))))
                     (define fib (lambda (n) (fib-iter n 0 1)))
                     (fib 40)
+                    """)
+       Assert.equal (Error "Couldn't find \"y\" in environment")
+                    (readAndEval """
+                     (define f (lambda (x y) (f2 x)))
+                     (define f2 (lambda (x) (int-plus x y)))
+                     (f 0 100)
                     """)
     test "map" do
        filecontents <- (FS.readTextFile) UTF8 preludePath
