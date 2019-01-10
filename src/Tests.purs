@@ -9,7 +9,7 @@ import Effect.Aff (Aff)
 import Effect.Aff.Compat (fromEffectFnAff)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
-import PsLisp (Expr(..), Result(..), Env)
+import PsLisp (Env, Expr(..), Result(..), EvalResult)
 import PsLisp.Eval (evalBlock', stdLib, defineMultipleInEnv)
 import PsLisp.Parse (readProgram, readExpr)
 import Test.Unit (suite, test)
@@ -23,7 +23,11 @@ evalResultEqualsExpr _ _ = false
 
 readAndEvalWithLib :: String -> String -> Result Expr
 readAndEvalWithLib prelude string = do
-  preludeResult <- (readProgram prelude) >>= (flip evalBlock' $ stdLib)
+  let formatPreludeError :: EvalResult -> EvalResult
+      formatPreludeError x = case x of
+                                   Error e -> Error $ "Prelude-error: " <> show e
+                                   e -> e
+  preludeResult <- formatPreludeError $ (readProgram prelude) >>= (flip evalBlock' $ stdLib)
   let fullResult = (readProgram string) >>= (flip evalBlock' $ defineMultipleInEnv (snd preludeResult) stdLib)
   case fullResult of
        Ok (Tuple expr _) -> Ok expr

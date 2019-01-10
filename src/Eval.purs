@@ -157,13 +157,13 @@ lambda exprs freeVars = do
           pure $ Tuple (Proc (newProc varNames block)) freeVars
        e -> Error ("Expected list of args, found: " <> show e)
      where newProc :: List String -> List Expr -> List Expr -> Env -> EvalResult
-           newProc varNames body boundExprs env = do
+           newProc varNames body boundExprs procEnv = do
              let blen = length boundExprs
              let vlen = length varNames
              _ <- maybeToResult (guard $ vlen == blen ) <|> Error ("Expected nr of args: " <> show vlen <> " but got: " <> show blen)
-             evaluatedBoundExprs <- evaluateListOfExpressions boundExprs freeVars
+             evaluatedBoundExprs <- evaluateListOfExpressions boundExprs procEnv
              let zippedArgs = zip varNames evaluatedBoundExprs
-             procEvalResult <- evalBlock' body (defineMultipleInEnv zippedArgs freeVars)
+             procEvalResult <- evalBlock' body (defineMultipleInEnv zippedArgs procEnv)
              pure $ Tuple (fst procEvalResult) freeVars
            getVarAtoms :: List Expr -> Result (List String)
            getVarAtoms (x:xs) = do
@@ -231,19 +231,11 @@ eval' (Atom s) env = do
   pure $ Tuple value env
 eval' (Quoted expr) env = do
   pure $ Tuple expr env
-eval' (List ((Atom name):xs)) env = do
-  let lookedUp = lookupEnv name env
-  case lookedUp of
-      Ok (Proc f) -> (f xs env)
-      Error e -> Error e
-      Ok e -> Error ("First arg to list must be a function, can't apply: " <> show e)
 eval' (List (x:xs)) env = do
-  let evaled :: EvalResult
-      evaled = eval' x env
+  evaled <- eval' x env
   case evaled of
-       Ok (Tuple (Proc f) _) -> f xs env
-       Ok (Tuple expr _) -> Error ("Can't evaluate using: " <> show expr)
-       Error e -> Error e
+       Tuple (Proc f) newEnv -> f xs env
+       expr   -> Error ("Can't evaluate using: " <> show expr)
 eval' (List (Nil)) _ = Error ("Cannot evaluate empty list")
 eval' (Proc _)   _ = Error "Cannot eval procedure"
 eval' s    _ = Ok (Tuple s Nil)
