@@ -147,11 +147,11 @@ lambda exprs freeVars = do
   args <- maybeToResult $ head exprs
   block <- maybeToResult $ tail exprs
   case args of
-       (DottedList xs rest) -> do
+       DottedList xs rest -> do
           xsParsed <- getVarAtoms xs
           restParsed <- getStringFromAtom rest
           pure $ Tuple (Proc (newDottedListProc (Tuple xsParsed restParsed) block)) freeVars
-       (List xs) -> do
+       List xs -> do
           varNames <- getVarAtoms xs
           pure $ Tuple (Proc (newProc varNames block)) freeVars
        e -> Error ("Expected list of args, found: " <> show e)
