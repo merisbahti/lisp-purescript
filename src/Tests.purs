@@ -65,9 +65,10 @@ main = runTest do
     test "non-dotted lambda errors" do
        filecontents <- (FS.readTextFile) UTF8 preludePath
        let readAndEval = readAndEvalWithLib filecontents
-       Assert.equal (Error "\"1\" cannot be bound to a variable") (readAndEval "((lambda (1) (+ 1 x)) 2)")
-       Assert.equal (Error "Variable list must be list of atoms, found: \"1\"") (readAndEval "((lambda 1 (+ 1 x)) 2)")
-       Assert.equal (Error "Variable list must be list of atoms, found: \"a\"") (readAndEval "((lambda a (+ 1 x)) 2)")
+       Assert.equal (Error "Cannot bind 1 to variable") (readAndEval "((lambda (1) (+ 1 x)) 2)")
+       Assert.equal (Error "Expected list of args, found: 1") (readAndEval "((lambda 1 (+ 1 x)) 2)")
+       Assert.equal (Error "Expected list of args, found: a") (readAndEval "((lambda a (+ 1 x)) 2)")
+       Assert.equal (Error "Cannot bind 1 to variable") (readAndEval "((lambda (1 2) (+ 1 x)) 2)")
     test "cons" do
        filecontents <- (FS.readTextFile) UTF8 preludePath
        let readAndEval = readAndEvalWithLib filecontents

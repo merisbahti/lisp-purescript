@@ -146,13 +146,15 @@ lambda :: List Expr -> Env -> EvalResult
 lambda exprs freeVars = do
   args <- maybeToResult $ head exprs
   block <- maybeToResult $ tail exprs
-  alt (do
-      varDottedList <- getVarDottedList args
-      pure $ Tuple (Proc (newDottedListProc varDottedList block)) freeVars
-      ) (do
-        varNames <- getVarAtoms args
-        pure $ Tuple (Proc (newProc varNames block)) freeVars
-        )
+  case args of
+       (DottedList xs rest) -> do
+          xsParsed <- getVarAtoms xs
+          restParsed <- getStringFromAtom rest
+          pure $ Tuple (Proc (newDottedListProc (Tuple xsParsed restParsed) block)) freeVars
+       (List xs) -> do
+          varNames <- getVarAtoms xs
+          pure $ Tuple (Proc (newProc varNames block)) freeVars
+       e -> Error ("Expected list of args, found: " <> show e)
      where newProc :: List String -> List Expr -> List Expr -> Env -> EvalResult
            newProc varNames body boundExprs env = do
              evaluatedBoundExprs <- evaluateListOfExpressions boundExprs env
@@ -161,26 +163,15 @@ lambda exprs freeVars = do
              procEvalResult <- evalBlock' body (defineMultipleInEnv zippedArgs env)
              pure $ case procEvalResult of
                       Tuple procExpr _ -> Tuple procExpr env
-           getVarAtoms :: Expr -> Result (List String)
-           getVarAtoms (List (Atom(x):xs)) = do
-              rest <- getVarAtoms (List(xs))
-              pure $ x : rest
-           getVarAtoms (List Nil)  = Ok (Nil)
-           getVarAtoms (List (x:xs)) = Error ("\"" <> show x <> "\"" <> " cannot be bound to a variable")
-           getVarAtoms x = Error ("Variable list must be list of atoms, found: \"" <> show x <> "\"")
-           getVarDottedList :: Expr -> Result (Tuple (List String) String)
-           getVarDottedList (DottedList init rest) = do
-              initArgs <- exprListToStrings init
-              case rest of
-                   Atom restVar  -> Ok (Tuple initArgs restVar)
-                   o             -> Error $ "Rest in dotted list must be atom, found: " <> show o
-                where exprListToStrings :: List Expr -> Result (List String)
-                      exprListToStrings (Nil) = Ok Nil
-                      exprListToStrings ((Atom x):xs) = do
-                        tail <- exprListToStrings xs
-                        pure $ x : tail
-                      exprListToStrings other = Error $ "Expected atom in dotted list found " <> show other
-           getVarDottedList  _ = Error "Not dotted list"
+           getVarAtoms :: List Expr -> Result (List String)
+           getVarAtoms (x:xs) = do
+              atom <- (getStringFromAtom x)
+              rest <- getVarAtoms xs
+              pure $ atom : rest
+           getVarAtoms (Nil)  = Ok (Nil)
+           getStringFromAtom :: Expr -> Result String
+           getStringFromAtom (Atom x) = pure x
+           getStringFromAtom e        = Error ("Cannot bind " <> show e <> " to variable")
            newDottedListProc :: Tuple (List String) String -> List Expr -> List Expr -> Env -> EvalResult
            newDottedListProc dottedList body boundExprs env = do
               evaluatedBoundExprs <- evaluateListOfExpressions boundExprs env
