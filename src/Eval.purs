@@ -7,8 +7,10 @@ import Control.MonadPlus (guard)
 import Data.List (List(..), filter, foldl, foldr, head, length, slice, tail, zip, (:))
 import Data.Maybe (Maybe(..))
 import Data.Traversable (sequence)
-import Prelude (bind, map, pure, show, ($), (+), (-), (/=), (<), (<$>), (<=), (<>), (==))
-import PsLisp (Env, EvalResult, Expr(..), Result(..))
+import Prelude (Unit, bind, map, pure, show, ($), (+), (-), (/=), (<), (<$>), (<<<), (<=), (<>), (==))
+import PsLisp (Env, Expr(..), Result(..), EvalResult)
+
+foreign import print :: String -> Unit
 
 
 stdLib :: Env
@@ -34,7 +36,17 @@ stdLib = (
   Tuple "cdr" (Proc cdr)
   ):(
   Tuple "nil?" (Proc isNil)
+  ):(
+  Tuple "print" (Proc unsafePrint)
   ) : Nil
+
+unsafePrint :: List Expr -> Env -> EvalResult
+unsafePrint= makeUnaryOp op
+  where op e = do
+          let res = print <<< show $ e
+          pure $ Null
+
+
 
 plus :: List Expr -> Env -> EvalResult
 plus = makeBinOp op
