@@ -73,6 +73,34 @@ main = runTest do
                     (int-plus x a)))
                     (f 2 3)
                     """)
+    test "scoping" do
+       filecontents <- (FS.readTextFile) UTF8 preludePath
+       let readAndEval = readAndEvalWithLib filecontents
+       Assert.equal (Ok (Int 1))
+                    (readAndEval """
+                     (define a 1)
+                     (define f (lambda () a))
+                     (f)
+                    """)
+       Assert.equal (Error "Couldn't find \"a\" in environment.")
+                    (readAndEval """
+                     (define f (
+                      lambda ()
+                             (define a 5)
+                             a))
+                     (f)
+                     a
+                    """)
+       Assert.equal (Error "Couldn't find \"y\" in environment.")
+                    (readAndEval """
+                     (define f (
+                      lambda (x y)
+                      (f2 x)))
+                     (define f2 (
+                      lambda (x)
+                        (int-plus x y)))
+                     (f 0 100)
+                    """)
     test "non-dotted lambda errors" do
        filecontents <- (FS.readTextFile) UTF8 preludePath
        let readAndEval = readAndEvalWithLib filecontents
@@ -214,12 +242,6 @@ main = runTest do
                     (define fib (lambda (n) (fib-iter n 0 1)))
                     (fib 40)
                     """)
-       Assert.equal (Error "Couldn't find \"y\" in environment")
-                    (readAndEval """
-                     (define f (lambda (x y) (f2 x)))
-                     (define f2 (lambda (x) (int-plus x y)))
-                     (f 0 100)
-                    """)
     test "map" do
        let readAndEval = readAndEvalWithLib ""
        Assert.equal (Ok (Int 5)) (readAndEval """
@@ -248,7 +270,6 @@ main = runTest do
                     ))
                     (map (lambda (x) (int-plus x 1)) '(1 2 3))
                     """)
-
        Assert.equal (Ok (List (Nil))) (readAndEval """
                     (define map
                       (lambda (f xs)

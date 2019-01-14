@@ -159,7 +159,7 @@ lambda exprs freeVars = do
              let vlen = length varNames
              _ <- maybeToResult (guard $ vlen == blen ) <|> Error ("Expected nr of args: " <> show vlen <> " but got: " <> show blen)
              let zippedArgs = zip varNames boundExprs
-             procEvalResult <- evalBlock' body (defineMultipleInEnv zippedArgs procEnv)
+             procEvalResult <- evalProcBlock body zippedArgs procEnv
              pure $ Tuple (fst procEvalResult) freeVars
            getVarAtoms :: List Expr -> Result (List String)
            getVarAtoms (x:xs) = do
@@ -179,17 +179,37 @@ lambda exprs freeVars = do
                   zippedInitArgs = zip varNames boundExprs
               let restArgs :: Tuple String Expr
                   restArgs = Tuple restVars (List (slice (length zippedInitArgs) (length boundExprs) boundExprs))
-              procEvalResult <- evalBlock' body (defineMultipleInEnv (restArgs : zippedInitArgs) env)
+              procEvalResult <- evalProcBlock body (restArgs : zippedInitArgs) env
               pure $ Tuple (fst procEvalResult) freeVars
 
+-- evalProcBlock is like evalBlock' except that it doesn't pass
+-- bound variables to proc.
+-- Bound variables are in the "boundEnv" argument, and are variables
+-- that are bound by a Proc, or defined within the procBlock
+evalProcBlock :: List Expr -> Env -> Env -> EvalResult
+evalProcBlock exprs boundVars freeVars = do
+  foldl step (Ok (Tuple Null (defineMultipleInEnv boundVars freeVars))) exprs
+  where step :: EvalResult -> Expr -> EvalResult
+        step res (List (x:xs)) = do
+           env <- snd <$> res
+           evaled <- eval' x env
+           case evaled of
+                Tuple (Proc f) _ -> do
+                   evaledArgs <- evaluateListOfExpressions xs env
+                   f evaledArgs freeVars
+                Tuple (SpecialForm f) _ -> do
+                   f xs env
+                expr   -> Error ("Can't evaluate (in proc block) using: " <> show expr)
+        step res expr = do
+           env <- snd <$> res
+           eval' expr env
 
 evaluateListOfExpressions :: List Expr -> Env -> Result (List Expr)
 evaluateListOfExpressions exprList env = do
    sequence $ map (\x -> evalEnvRemoved x env) exprList
 
-
 lookupEnv :: String -> Env -> Result Expr
-lookupEnv name env = (maybeToResult $ lookup name env) <|> (Error ("Couldnt find \""<>name<>"\" in environment:" <> show env))
+lookupEnv name env = (maybeToResult $ lookup name env) <|> (Error ("Couldn't find \""<>name<>"\" in environment."))
 
 defineInEnv :: (Tuple String Expr) -> Env -> Env
 defineInEnv e@(Tuple name expr) env = e : (filter (\x -> (fst x) /= name) env)
