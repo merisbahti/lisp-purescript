@@ -2,7 +2,7 @@ module PsLisp.Eval where
 
 import Data.Tuple
 
-import Control.Alt (alt, (<|>))
+import Control.Alt ((<|>))
 import Control.MonadPlus (guard)
 import Data.List (List(..), filter, foldl, foldr, head, length, slice, tail, zip, (:))
 import Data.Maybe (Maybe(..))
@@ -15,13 +15,13 @@ stdLib :: Env
 stdLib = (
   Tuple "int-plus" (Proc plus)
   ):(
-  Tuple "lambda" (Proc lambda)
+  Tuple "lambda" (SpecialForm lambda)
   ):(
   Tuple "int-minus" (Proc minus)
   ):(
-  Tuple "define" (Proc define)
+  Tuple "define" (SpecialForm define)
   ):(
-  Tuple "cond" (Proc cond)
+  Tuple "cond" (SpecialForm cond)
   ):(
   Tuple "<" (Proc lt)
   ):(
@@ -48,15 +48,12 @@ minus = makeBinOp op
 
 makeBinOp :: (Expr -> Expr -> Result Expr) -> List Expr -> Env -> EvalResult
 makeBinOp op (lh:rh:Nil) env = do
-  lhEval <- evaluateAndGetExpr lh env
-  rhEval <- evaluateAndGetExpr rh env
-  addEnvToExprResult (op lhEval rhEval) env
+  addEnvToExprResult (op lh rh) env
 makeBinOp _ _ _ = Error "More than one arg passed to binary operator"
 
 makeUnaryOp :: (Expr -> Result Expr) -> List Expr -> Env -> EvalResult
 makeUnaryOp op (x : Nil) env = do
-  lh <- evalEnvRemoved x env
-  addEnvToExprResult (op lh) env
+  addEnvToExprResult (op x) env
 makeUnaryOp _ _ _ = do
   Error ("Unary operator takes 1 argument")
 
@@ -80,14 +77,14 @@ car = makeUnaryOp op
   where op (List xs) = do
           elem <- (maybeToResult $ head xs) <|> Error "Cannot car empty list"
           pure $ elem
-        op _         = Error "car can only be used on 1 argument"
+        op x         = Error $ "car can only be on lists, got:" <> show x
 
 cdr :: List Expr -> Env -> EvalResult
 cdr = makeUnaryOp op
   where op (List xs) = do
           elem <- (maybeToResult $ tail xs) <|> Error "Cannot cdr empty list"
           pure $ List (elem)
-        op _         = Error "Cannot cdr empty list"
+        op e         = Error $ "Cannot cdr " <> show e
 
 isNil :: List Expr -> Env -> EvalResult
 isNil = makeUnaryOp op
@@ -161,8 +158,7 @@ lambda exprs freeVars = do
              let blen = length boundExprs
              let vlen = length varNames
              _ <- maybeToResult (guard $ vlen == blen ) <|> Error ("Expected nr of args: " <> show vlen <> " but got: " <> show blen)
-             evaluatedBoundExprs <- evaluateListOfExpressions boundExprs procEnv
-             let zippedArgs = zip varNames evaluatedBoundExprs
+             let zippedArgs = zip varNames boundExprs
              procEvalResult <- evalBlock' body (defineMultipleInEnv zippedArgs procEnv)
              pure $ Tuple (fst procEvalResult) freeVars
            getVarAtoms :: List Expr -> Result (List String)
@@ -179,11 +175,10 @@ lambda exprs freeVars = do
               let blen = length boundExprs
               let vlen = length varNames
               _ <- maybeToResult (guard $ vlen <= blen ) <|> Error ("Expected nr of args: " <> show vlen <> " but got: " <> show blen)
-              evaluatedBoundExprs <- evaluateListOfExpressions boundExprs env
               let zippedInitArgs :: List (Tuple String Expr)
-                  zippedInitArgs = zip varNames evaluatedBoundExprs
+                  zippedInitArgs = zip varNames boundExprs
               let restArgs :: Tuple String Expr
-                  restArgs = Tuple restVars (List (slice (length zippedInitArgs) (length boundExprs) evaluatedBoundExprs))
+                  restArgs = Tuple restVars (List (slice (length zippedInitArgs) (length boundExprs) boundExprs))
               procEvalResult <- evalBlock' body (defineMultipleInEnv (restArgs : zippedInitArgs) env)
               pure $ Tuple (fst procEvalResult) freeVars
 
@@ -234,8 +229,11 @@ eval' (Quoted expr) env = do
 eval' (List (x:xs)) env = do
   evaled <- eval' x env
   case evaled of
-       Tuple (Proc f) newEnv -> f xs env
+       Tuple (Proc f) newEnv -> do
+          evaledArgs <- evaluateListOfExpressions xs env
+          f evaledArgs env
+       Tuple (SpecialForm f) newEnv -> do
+          f xs env
        expr   -> Error ("Can't evaluate using: " <> show expr)
 eval' (List (Nil)) _ = Error ("Cannot evaluate empty list")
-eval' (Proc _)   _ = Error "Cannot eval procedure"
-eval' s    _ = Ok (Tuple s Nil)
+eval' s    e = Ok (Tuple s e)

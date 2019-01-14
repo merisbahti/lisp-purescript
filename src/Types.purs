@@ -12,6 +12,7 @@ instance showExpr :: Show Expr where
   show (Int i) = show i
   show (Boolean b) = show b
   show (Proc _) = "Procedure"
+  show (SpecialForm _) = "SpecialForm"
   show (String s) = "\""<> s <>"\""
   show (Quoted e) = "'" <> show e
   show (DottedList init rest) = "(" <> (intercalate " " <<< map show $ init) <> " . " <> show rest <> ")"
@@ -26,6 +27,7 @@ data Expr
   | List (List Expr)
   | Int Int
   | Proc (List Expr -> Env -> EvalResult)
+  | SpecialForm (List Expr -> Env -> EvalResult)
   | String String
   | DottedList (List Expr) Expr
   | Boolean (Boolean)
