@@ -13,7 +13,7 @@ instance showExpr :: Show Expr where
   show (Boolean b) = show b
   show (Proc _) = "Procedure"
   show (SpecialForm _) = "SpecialForm"
-  show (String s) = "\""<> s <>"\""
+  show (String s) = "\""<> s <> "\""
   show (Quoted e) = "'" <> show e
   show (DottedList init rest) = "(" <> (intercalate " " <<< map show $ init) <> " . " <> show rest <> ")"
   show Null = "Null"

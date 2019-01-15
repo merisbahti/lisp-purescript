@@ -2,36 +2,39 @@ module Main where
 
 import Prelude
 
-import Data.Tuple (Tuple(..))
+import Data.Array ((!!))
+import Data.Maybe (Maybe(..))
+import Data.Tuple (Tuple(..), snd)
 import Effect (Effect)
 import Effect.Console (log)
-import PsLisp (EvalResult, Result(..))
-import PsLisp.Eval (eval)
-import PsLisp.Parse (readExpr)
+import Node.Encoding (Encoding(..))
+import Node.FS.Sync (readTextFile) as FS
+import PsLisp (EvalResult, Expr, Result(..))
+import PsLisp.Eval (evalBlock', stdLib, defineMultipleInEnv)
+import PsLisp.Parse (readProgram)
 
-showResultExpr :: EvalResult -> String
-showResultExpr (Ok (Tuple e _)) = "Result: " <> show e
-showResultExpr (Error e) = "Error: " <> e
+foreign import args :: Unit -> Array String
 
-showResult :: EvalResult -> String
-showResult (Ok (Tuple e env)) = "Result: " <> show e <> " with env: " <> show env
-showResult (Error e) = "Error: " <> e
+readAndEvalWithLib :: String -> String -> Result Expr
+readAndEvalWithLib prelude string = do
+  let formatPreludeError :: EvalResult -> EvalResult
+      formatPreludeError x = case x of
+                                   Error e -> Error $ "Prelude-error: " <> show e
+                                   e -> e
+  preludeResult <- formatPreludeError $ (readProgram prelude) >>= (flip evalBlock' $ stdLib)
+  let fullResult = (readProgram string) >>= (flip evalBlock' $ defineMultipleInEnv (snd preludeResult) stdLib)
+  case fullResult of
+       Ok (Tuple expr _) -> Ok expr
+       Error e           -> Error e
 
 main :: Effect Unit
 main = do
-  log "Parsing"
-  log (show $ readExpr "(+ 1 1 2)")
-  log (show $ readExpr "(+ 1 2 3)")
-  log (show $ readExpr "(a ())")
-  log (show $ readExpr "(a b . c)")
-  log (show $ readExpr """(a b . n)""")
-  log "Evaulating"
-  log (showResult $ readExpr "(a + 1)" >>= eval)
-  log (showResult $ readExpr "(1 1 1)" >>= eval)
-  log (showResult $ readExpr "(+ 1 1)" >>= eval)
-  log (showResult $ readExpr "(+ (+ 2 3) (+ 4 5))" >>= eval)
-  log (showResult $ readExpr "(+ (+ a 3) (+ 4 5))" >>= eval)
-  log (showResult $ readExpr "(- 3 2 1)" >>= eval)
-  log (showResult $ readExpr "((lambda (x y) (+ x y)) 3 3)" >>= eval)
-  log (showResult $ readExpr "((lambda (x y) (+ 3 x)) 5)" >>= eval)
-  log (showResult $ readExpr "((lambda (x) x) 3)" >>= eval)
+  let myArgs = args unit
+  let arg = myArgs !! 2
+  case arg of
+       Just x -> do
+          argFile <- (FS.readTextFile) UTF8 x
+          read <- readAndEvalWithLib <$> ((FS.readTextFile) UTF8 "./src/prelude.lisp")
+          let _ = read argFile
+          log ""
+       _ -> log "1 argument: file name"

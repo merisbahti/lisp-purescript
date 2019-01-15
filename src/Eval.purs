@@ -10,8 +10,6 @@ import Data.Traversable (sequence)
 import Prelude (Unit, bind, map, pure, show, ($), (+), (-), (/=), (<), (<$>), (<<<), (<=), (<>), (==))
 import PsLisp (Env, Expr(..), Result(..), EvalResult)
 
-foreign import print :: String -> Unit
-
 
 stdLib :: Env
 stdLib = (
@@ -40,13 +38,13 @@ stdLib = (
   Tuple "print" (Proc unsafePrint)
   ) : Nil
 
+foreign import print :: String -> Unit
+
 unsafePrint :: List Expr -> Env -> EvalResult
 unsafePrint= makeUnaryOp op
   where op e = do
-          let res = print <<< show $ e
+          let _ = print <<< show $ e
           pure $ Null
-
-
 
 plus :: List Expr -> Env -> EvalResult
 plus = makeBinOp op

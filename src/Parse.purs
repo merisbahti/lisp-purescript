@@ -39,6 +39,14 @@ parseAtom = do
               "false" -> Boolean false
               _ -> Atom atom
 
+parseString :: SParser Expr
+parseString = do
+  _ <- char '"'
+  rest <- many $ letter <|> symbol <|> digit <|> char ' '
+  _ <- char '"'
+  let str = charlistToString $ rest
+  pure $ String str
+
 parseInt :: SParser Expr
 parseInt = do
   first <- digit
@@ -69,6 +77,7 @@ parseExpr = fix $ \p -> whiteSpace *> (parseInt
                          x <- (try parseDottedList <|> try (parseList p))
                          _ <- char ')'
                          pure x)
+                     <|> parseString
                      <|> parseAtom
                      <|> (parseQuoted p)
 ) <* whiteSpace
