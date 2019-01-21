@@ -1,10 +1,3 @@
-(define recur
-  (lambda (x y)
-    (cond
-      ((= x y) x)
-      (true (recur (int-plus x 1) y))
-    )))
-(recur 0 5)
 (define foldl
   (lambda (func accum lst)
   (cond ((nil? lst) accum)

@@ -10,7 +10,6 @@ import Data.Traversable (sequence)
 import Prelude (Unit, bind, map, pure, show, ($), (+), (-), (/=), (<), (<$>), (<<<), (<=), (<>), (==))
 import PsLisp (Env, Expr(..), Result(..), EvalResult)
 
-
 stdLib :: Env
 stdLib = (
   Tuple "int-plus" (Proc plus)
@@ -169,7 +168,7 @@ lambda exprs freeVars = do
              let vlen = length varNames
              _ <- maybeToResult (guard $ vlen == blen ) <|> Error ("Expected nr of args: " <> show vlen <> " but got: " <> show blen)
              let zippedArgs = zip varNames boundExprs
-             procEvalResult <- evalProcBlock body zippedArgs procEnv
+             procEvalResult <- evalProcBlock body {boundVars: zippedArgs, freeVars: procEnv}
              pure $ Tuple (fst procEvalResult) freeVars
            getVarAtoms :: List Expr -> Result (List String)
            getVarAtoms (x:xs) = do
@@ -189,15 +188,15 @@ lambda exprs freeVars = do
                   zippedInitArgs = zip varNames boundExprs
               let restArgs :: Tuple String Expr
                   restArgs = Tuple restVars (List (slice (length zippedInitArgs) (length boundExprs) boundExprs))
-              procEvalResult <- evalProcBlock body (restArgs : zippedInitArgs) env
+              procEvalResult <- evalProcBlock body {boundVars: (restArgs : zippedInitArgs), freeVars: env}
               pure $ Tuple (fst procEvalResult) freeVars
 
 -- evalProcBlock is like evalBlock' except that it doesn't pass
 -- bound variables to proc.
 -- Bound variables are in the "boundEnv" argument, and are variables
 -- that are bound by a Proc, or defined within the procBlock
-evalProcBlock :: List Expr -> Env -> Env -> EvalResult
-evalProcBlock exprs boundVars freeVars = do
+evalProcBlock :: List Expr -> {freeVars :: Env, boundVars :: Env} -> EvalResult
+evalProcBlock exprs {boundVars, freeVars} = do
   foldl step (Ok (Tuple Null (defineMultipleInEnv boundVars freeVars))) exprs
   where step :: EvalResult -> Expr -> EvalResult
         step res (List (x:xs)) = do
