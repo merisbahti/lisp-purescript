@@ -13,7 +13,7 @@ import PsLisp (EvalResult, Expr, Result(..))
 import PsLisp.Eval (evalBlock', stdLib, defineMultipleInEnv)
 import PsLisp.Parse (readProgram)
 
-foreign import args :: Unit -> Array String
+foreign import args :: Array String
 
 readAndEvalWithLib :: String -> String -> Result Expr
 readAndEvalWithLib prelude string = do
@@ -29,8 +29,7 @@ readAndEvalWithLib prelude string = do
 
 main :: Effect Unit
 main = do
-  let myArgs = args unit
-  let arg = myArgs !! 2
+  let arg = args !! 2
   case arg of
        Just x -> do
           argFile <- (FS.readTextFile) UTF8 x
